@@ -1,0 +1,45 @@
+{
+  "minMeanLuminance": 0.34,
+  "shots": [
+    {
+      "name": "day",
+      "phase": "day",
+      "label": "낮",
+      "res": "420",
+      "mean": 0.8056687784484294,
+      "p10": 0.5598486274509804,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "name": "dusk",
+      "phase": "dusk",
+      "label": "노을",
+      "res": "full",
+      "mean": 0.6820836708866869,
+      "p10": 0.5608101960784313,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "name": "night",
+      "phase": "night",
+      "label": "밤",
+      "res": "150",
+      "mean": 0.6485949217969612,
+      "p10": 0.5144886274509803,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "name": "dawn",
+      "phase": "dawn",
+      "label": "새벽",
+      "res": "300",
+      "mean": 0.6818549218679433,
+      "p10": 0.5717458823529411,
+      "errors": [],
+      "ok": true
+    }
+  ]
+}

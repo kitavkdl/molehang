@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light" />
+    <title>몰래항</title>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <div id="ui" class="ui">
+      <!-- 상단: 자원 표시 -->
+      <header class="topbar">
+        <div class="brand">몰래항</div>
+        <button class="chip" id="open-sheet" type="button" aria-haspopup="dialog">
+          <span class="chip__dot" aria-hidden="true"></span>
+          기록
+        </button>
+      </header>
+
+      <div class="stock" id="stock">
+        <div class="stock__row">
+          <span class="stock__amount" id="stock-amount">0</span>
+          <span class="stock__cap" id="stock-cap">/ 0</span>
+        </div>
+        <div class="stock__bar"><div class="stock__fill" id="stock-fill"></div></div>
+        <div class="stock__note" id="stock-note">모으는 중…</div>
+      </div>
+
+      <!-- 하단: 수거 버튼 하나 -->
+      <footer class="dock">
+        <button class="collect" id="collect" type="button" disabled>
+          <span class="collect__label">수거</span>
+          <span class="collect__sub" id="collect-sub">아직 모이는 중</span>
+        </button>
+      </footer>
+    </div>
+
+    <!-- 아래에서 올라오는 시트 -->
+    <div class="scrim" id="scrim" hidden></div>
+    <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="수거 기록" hidden>
+      <div class="sheet__grip" id="sheet-grip"></div>
+      <div class="sheet__head">
+        <h2 class="sheet__title">수거 기록</h2>
+        <button class="sheet__close" id="close-sheet" type="button" aria-label="닫기">✕</button>
+      </div>
+      <div class="sheet__stats" id="sheet-stats"></div>
+      <ul class="log" id="log"></ul>
+      <p class="log__empty" id="log-empty">아직 수거한 적이 없어요.<br />수업이 지루해질 때쯤 다시 오세요.</p>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

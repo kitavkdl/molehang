@@ -1,0 +1,22 @@
+{
+  "name": "molehang",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "몰래항 — 지루한 시간 동안 쌓이는 자원을 수거하는 유휴 게임 (데모)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "shots": "node tools/shots.mjs"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "playwright": "^1.62.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  }
+}
