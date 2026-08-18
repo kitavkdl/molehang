@@ -1121,10 +1121,7 @@ body {
 .wheel__slice--2 { background: color-mix(in srgb, var(--mh-role-secret) 18%, var(--mh-role-surface)); }
 .wheel__slice--3 { background: color-mix(in srgb, var(--mh-role-gaugeTrack) 60%, var(--mh-role-surface)); }
 
-/* 조각 배경이 겹치지 않게 부채꼴로 잘라 낸다 */
-.wheel__slice {
-  clip-path: polygon(50% 50%, 34% 0, 66% 0);
-}
+/* 조각의 부채꼴 clip-path 는 조각 수에 따라 JS(gacha.ts)가 계산해 넣는다 */
 
 .wheel__label {
   font-size: 11px;

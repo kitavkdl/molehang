@@ -80,9 +80,14 @@ export interface MolehangGateway {
   /** 수거 확정 — 미수거분이 고철 잔고로 들어간다 */
   collect(now: number, multiplier?: number): Promise<CollectOutcome>;
   /** 뽑기 — 고철을 쓰고 부품 하나를 뽑는다. 장착은 별도(자리 결정이 필요할 수 있다) */
-  draw(tier: PartTier, now: number): Promise<DrawOutcome>;
+  draw(tier: PartTier, now: number, multiplier?: number): Promise<DrawOutcome>;
   /** 장착 확정. remove 를 주면 그 부품을 하나 빼고 자리를 만든다 */
-  install(kind: PartKind, remove: PartKind | null, now: number): Promise<InstallOutcome>;
+  install(
+    kind: PartKind,
+    remove: PartKind | null,
+    now: number,
+    multiplier?: number,
+  ): Promise<InstallOutcome>;
   /** 부품을 끌어 놓은 자리를 저장. null 이면 기본 자리로 되돌린다 */
   setPlacements(placements: Record<string, [number, number, number]>): Promise<PersistedState>;
   /** 테마 뽑기. drawn 이 null 이면 고철 부족이거나 이미 다 모았다 */
@@ -90,9 +95,21 @@ export interface MolehangGateway {
   /** 갖고 있는 테마로 바꾼다 */
   setTheme(id: ThemeId): Promise<PersistedState>;
   /** 친구가 보내온 몫 */
-  receiveGift(now: number, scrap: number): Promise<PersistedState>;
+  receiveGift(now: number, scrap: number, multiplier?: number): Promise<PersistedState>;
   /** 수거 기록 (최신순) */
   log(limit?: number): Promise<CollectLogEntry[]>;
   /** 데모용 — 저장 초기화 */
   reset(): Promise<PersistedState>;
+}
+
+/**
+ * 계정으로 옮길 만한 게스트 기록인지.
+ *
+ * 페이지를 열어 두기만 해도 미수거분(pending)은 저절로 쌓이므로 그건 기준이 못 된다.
+ * **사람이 한 일**(수거·뽑기·장착)이 남아 있을 때만 계정으로 가져간다 —
+ * 안 그러면 로그인할 때마다 빈 배가 한 척씩 늘어난다.
+ */
+export function hasProgress(state: PersistedState): boolean {
+  if (state.lifetime > 0 || state.scrap > 0) return true;
+  return Object.values(state.parts).some((count) => count > 0);
 }

@@ -168,7 +168,8 @@ export class SupabaseGateway implements MolehangGateway {
     return { state: this.snapshot(), taken, entry };
   }
 
-  async draw(tier: PartTier, now: number): Promise<DrawOutcome> {
+  // 서버 정산(sync_ship)은 선단 배율을 모른다 — 배율 인자는 인터페이스 호환용으로만 받는다
+  async draw(tier: PartTier, now: number, _multiplier = 1): Promise<DrawOutcome> {
     await this.sync(now, 1);
     const cost = gachaCost(tier, this.state.pulls[tier]);
     if (this.state.scrap < cost) return { state: this.snapshot(), drawn: null, needsRoom: false };
@@ -183,7 +184,12 @@ export class SupabaseGateway implements MolehangGateway {
     return { state: this.snapshot(), drawn, needsRoom: PART_INFO[drawn].slots > free };
   }
 
-  async install(kind: PartKind, remove: PartKind | null, now: number): Promise<InstallOutcome> {
+  async install(
+    kind: PartKind,
+    remove: PartKind | null,
+    now: number,
+    _multiplier = 1,
+  ): Promise<InstallOutcome> {
     await this.sync(now, 1);
     if (remove !== null && this.state.parts[remove] > 0) this.state.parts[remove] -= 1;
     this.state.parts[kind] += 1;
@@ -237,7 +243,7 @@ export class SupabaseGateway implements MolehangGateway {
     return this.snapshot();
   }
 
-  async receiveGift(now: number, scrap: number): Promise<PersistedState> {
+  async receiveGift(now: number, scrap: number, _multiplier = 1): Promise<PersistedState> {
     await this.sync(now, 1);
     this.state.scrap += Math.max(0, Math.round(scrap));
     await this.push({ scrap: this.state.scrap });
@@ -341,8 +347,15 @@ export async function renameShip(id: string, name: string): Promise<void> {
 }
 
 /**
- * 게스트로 놀던 배를 계정으로 옮긴다.
- * 처음 로그인할 때 "지금까지 하던 게 사라지나?" 를 없애 주는 장치.
+ * 게스트로 놀던 배를 계정으로 통째로 옮긴다.
+ *
+ * 게스트 기록은 탭을 닫으면 사라지므로, 여기서 빠뜨린 값은 **영영 없어진다.**
+ * 그래서 배치·테마·뽑기 횟수까지 `PersistedState` 전부를 넘긴다 —
+ * 새 칸이 생기면 여기도 같이 늘려야 한다.
+ *
+ * 딱 하나, 마지막 정산 시각만 안 보낸다. 시간의 권위는 서버에 있고(CLAUDE.md §5),
+ * 기기 시계를 앞당겨 둔 채 로그인하면 그만큼 공짜 축적이 되기 때문이다.
+ * 서버는 now() 부터 세기 시작하고, 이미 쌓아 둔 미수거분은 pending 으로 그대로 간다.
  */
 export async function importLocalShip(name: string, state: PersistedState): Promise<string | null> {
   const { data: userData } = await supabase().auth.getUser();
@@ -357,16 +370,24 @@ export async function importLocalShip(name: string, state: PersistedState): Prom
       pending: state.pending,
       scrap: state.scrap,
       lifetime: state.lifetime,
-      last_accrued_at: new Date(state.lastAccruedAt).toISOString(),
       last_collected_at:
         state.lastCollectedAt === null ? null : new Date(state.lastCollectedAt).toISOString(),
       parts: state.parts,
       pulls: state.pulls,
+      placements: state.placements,
       titles: state.titles,
+      theme: state.theme,
+      themes: state.themes,
+      theme_pulls: state.themePulls,
       log: state.log,
     })
     .select('id')
     .single();
 
-  return error === null && data !== null ? String(data.id) : null;
+  if (error !== null || data === null) {
+    // 실패를 삼키면 게스트 기록이 조용히 사라진다 — 호출부가 알아야 한다
+    console.warn('[molehang] 게스트 배를 계정으로 옮기지 못했습니다', error?.message);
+    return null;
+  }
+  return String(data.id);
 }

@@ -27,6 +27,22 @@ export const HULL: HullSpec = {
 /** 정면이 아니라 살짝 비스듬히 — 뱃머리와 측면이 같이 보이게 */
 export const BOAT_YAW = Math.PI * 0.19;
 
+/**
+ * 선체에 원래부터 붙어 있는 것들의 치수.
+ *
+ * boat.ts 가 메시를 세우는 데 쓰고, part-support.ts 가 **부품이 닿을 수 있는 면**을
+ * 만드는 데 쓴다. 두 곳이 같은 숫자를 보지 않으면 부품이 돛대 옆에 띄거나
+ * 허공을 짚는다.
+ */
+export const FITTINGS = {
+  mast: { height: 3.7, top: 0.055, bottom: 0.085, z: 0.5, drop: 0.14 },
+  sail: { height: 3.0, chord: 2.75, bulge: 0.56, rise: 0.3, z: 0.45 },
+  stripe: { chord: 2.94, bulge: 0.585, u0: 0.44, u1: 0.58 },
+  flag: { size: 0.62, drop: 0.74 },
+  crate: { width: 0.86, height: 0.64, depth: 0.8, rise: 0.32, z: -1.6 },
+  crateTrim: { width: 0.93, height: 0.12, depth: 0.87, rise: 0.64 },
+} as const;
+
 /** 길이방향 위치 t(0=선미, 1=선수) 에서의 폭 배율 / 갑판선 / 용골선 */
 function station(t: number, spec: HullSpec): { w: number; yTop: number; yBottom: number } {
   const s = 0.18 + 0.82 * t;
@@ -37,6 +53,30 @@ function station(t: number, spec: HullSpec): { w: number; yTop: number; yBottom:
     yTop: spec.freeboard + 0.5 * spec.freeboard * (1 - bulge),
     yBottom: -spec.depth * (0.35 + 0.65 * bulge),
   };
+}
+
+/**
+ * z 좌표를 단면 파라미터 t 로. 배 밖으로 나가는 z 는 끝단면으로 묶는다.
+ * 부품이 선체 어디에 닿는지를 재려면 단면을 z 로 되묻는 길이 필요하다.
+ */
+function sectionAt(z: number, spec: HullSpec): { w: number; yTop: number; yBottom: number } {
+  const t = Math.min(1, Math.max(0, z / spec.length + 0.5));
+  return station(t, spec);
+}
+
+/** z 위치에서 선체가 가장 넓은 반폭 */
+export function hullHalfWidthAt(z: number, spec: HullSpec = HULL): number {
+  return (spec.beam / 2) * sectionAt(z, spec).w;
+}
+
+/** z 위치에서의 갑판선 높이 (물건을 올려놓는 면) */
+export function hullDeckAt(z: number, spec: HullSpec = HULL): number {
+  return sectionAt(z, spec).yTop;
+}
+
+/** z 위치에서의 배 밑바닥 */
+export function hullBottomAt(z: number, spec: HullSpec = HULL): number {
+  return sectionAt(z, spec).yBottom;
 }
 
 function ribPoints(t: number, spec: HullSpec): Vector3[] {

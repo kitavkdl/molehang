@@ -1,4 +1,4 @@
-import type { PersistedState } from '../game/gateway.ts';
+import { hasProgress, type PersistedState } from '../game/gateway.ts';
 import { t } from '../i18n/index.ts';
 import type { Auth } from '../net/auth.ts';
 import {
@@ -13,10 +13,18 @@ import { amount } from './format.ts';
  * 계정 패널 — 게스트 / 코드 인증 / 배 목록.
  *
  * 게스트가 기본이고 로그인은 선택이다. 그래서 이 패널은 게임을 막지 않는다.
- * 처음 로그인할 때는 게스트로 만들던 배를 계정으로 **가져가겠냐고 먼저 묻는다** —
- * 여태 키운 게 사라지는 것처럼 보이면 아무도 로그인하지 않는다.
+ * 다만 게스트 기록은 **탭을 닫으면 사라진다.** 그래서 처음 로그인할 때
+ * 게스트로 만들던 배를 **묻지 않고 계정으로 옮긴다** — 여기서 "아니오"를 만들면
+ * 그 선택이 곧 삭제가 되고, 여태 키운 게 사라지는 게임에는 아무도 로그인하지 않는다.
  */
 const SHIP_KEY = 'molehang.ship';
+
+/** 게스트 저장에 닿는 통로. 계정 패널이 게이트웨이 자체를 알 필요는 없다 */
+export interface GuestSave {
+  snapshot(): PersistedState;
+  /** 계정으로 옮긴 뒤 호출 — 게스트 흔적을 지운다 */
+  clear(): void;
+}
 
 export function selectedShipId(): string | null {
   try {
@@ -63,7 +71,7 @@ export class AccountPanel {
 
   constructor(
     private readonly auth: Auth,
-    private readonly localState: () => PersistedState,
+    private readonly guest: GuestSave,
     private readonly onSwitch: () => void,
   ) {
     this.chip.addEventListener('click', () => void this.open());
@@ -80,6 +88,17 @@ export class AccountPanel {
     this.otpInput.addEventListener('input', () => {
       this.otpInput.value = this.otpInput.value.replace(/\D/g, '').slice(0, 6);
       if (this.otpInput.value.length === 6) void this.verify();
+    });
+
+    // 키보드로도 막힘 없이 — Enter 제출, Esc 닫기
+    this.emailInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') void this.send();
+    });
+    this.otpInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') void this.verify();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !this.root.hidden) this.hide();
     });
 
     this.auth.onChange(() => this.renderChip());
@@ -157,11 +176,19 @@ export class AccountPanel {
       return;
     }
 
-    // 게스트로 키우던 배가 있으면 가져갈지 묻는다
-    const local = this.localState();
-    if (local.lifetime > 0 && globalThis.confirm(t('auth.importAsk'))) {
+    // 게스트로 키우던 배를 계정으로 옮긴다 — 묻지 않는다.
+    // 게스트 기록은 어차피 탭을 닫으면 사라지므로, 물어서 얻는 건 실수로 잃을 기회뿐이다.
+    const local = this.guest.snapshot();
+    if (hasProgress(local)) {
       const id = await importLocalShip(t('auth.importedName'), local);
-      if (id !== null) selectShip(id);
+      if (id === null) {
+        // 못 옮겼으면 게스트 기록을 지우지도, 화면을 갈아엎지도 않는다.
+        // 이 탭을 그대로 두면 여태 만들던 배는 살아 있다.
+        this.codeHint.textContent = t('auth.importFailed');
+        return;
+      }
+      selectShip(id);
+      this.guest.clear();
     }
     await this.showShips();
     this.onSwitch();

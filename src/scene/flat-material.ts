@@ -46,6 +46,7 @@ uniform float uPower;
 uniform float uNight;
 uniform float uLamp;
 uniform vec3 uNightTint;
+uniform float uUnlit;
 
 varying vec3 vWorld;
 
@@ -70,6 +71,9 @@ void main() {
   float dark = uNight * (1.0 - uLamp);
   c = mix(c, c * uNightTint * 0.3, dark);
 
+  // 조명을 아예 안 받는 면(= UI 표식). 밤에도 팔레트 색 그대로 남는다.
+  c = mix(c, uColor, uUnlit);
+
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }
@@ -77,10 +81,11 @@ void main() {
 
 /** 팔레트 키만 받는다 — 임의의 색을 만들 수 있는 경로 자체를 없앤다. (CLAUDE.md §3.1) */
 export class FlatMaterial extends ShaderMaterial {
-  constructor(key: PaletteKey) {
+  constructor(key: PaletteKey, unlit = false) {
     super({
       uniforms: {
         uColor: { value: col(key) },
+        uUnlit: { value: unlit ? 1 : 0 },
         ...SHARED,
       },
       vertexShader: VERT,
@@ -100,6 +105,17 @@ export class FlatMaterial extends ShaderMaterial {
 /** 씬 코드는 이 단축 생성자만 쓴다 */
 export function flat(key: PaletteKey): FlatMaterial {
   return new FlatMaterial(key);
+}
+
+/**
+ * 조명을 받지 않는 판. **세계의 표면이 아니라 화면 위 표식**에만 쓴다
+ * (배치 모드 테두리처럼). 밤이 되면 배는 어둠에 잠기는 게 맞지만,
+ * "이건 만질 수 있다"고 알려 주는 표식까지 같이 잠기면 조작이 안 보인다.
+ *
+ * 색은 여전히 팔레트 키로만 받는다 — 임의 색 경로는 여기에도 없다.
+ */
+export function flatUnlit(key: PaletteKey): FlatMaterial {
+  return new FlatMaterial(key, true);
 }
 
 /** 프레임마다 1회 — 공유 조명 uniform 갱신 */

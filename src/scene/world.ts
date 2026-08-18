@@ -105,7 +105,10 @@ export class World {
       () => this.boat.arrangeTargets,
       {
         onDrop: (key, position) => this.arrangeDrop(key, position),
-        onPick: (key) => this.arrangePick(key),
+        onPick: (key) => {
+          this.boat.setPickedPart(key);
+          this.arrangePick(key);
+        },
       },
     );
 
@@ -130,9 +133,10 @@ export class World {
     this.boat.setParts(inventory, animateNew, placements);
   }
 
-  /** 배치 모드 켜기/끄기 */
+  /** 배치 모드 켜기/끄기 — 드래그를 열고, 옮길 수 있는 부품에 테두리를 씌운다 */
   setArrangeMode(active: boolean): void {
     this.arrange.setActive(active);
+    this.boat.setArrangeMode(active);
   }
 
   /**

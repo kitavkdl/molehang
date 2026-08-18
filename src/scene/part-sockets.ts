@@ -1,8 +1,16 @@
-import { BufferGeometry, CylinderGeometry, Group, Mesh, OctahedronGeometry } from 'three';
+import {
+  Box3,
+  BufferGeometry,
+  CylinderGeometry,
+  Group,
+  Matrix4,
+  Mesh,
+  OctahedronGeometry,
+} from 'three';
 import { PART_INFO, type PartKind, type PartZone } from '../game/parts.ts';
 import { PART_COLORS } from '../style/palette.ts';
 import { flat, type FlatMaterial } from './flat-material.ts';
-import { HULL, boxGeometry, sailGeometry } from './hull.ts';
+import { HULL, boxGeometry, hullHalfWidthAt, sailGeometry } from './hull.ts';
 
 /**
  * 파츠 지오메트리 + **구역 기반 배치**.
@@ -25,6 +33,20 @@ export interface Placement {
 const DECK_Y = HULL.freeboard;
 const HALF_L = HULL.length / 2;
 const HALF_B = HULL.beam / 2;
+
+/**
+ * 현측 부품이 붙는 x — **선체 껍데기를 따라간다.**
+ *
+ * 예전에는 어느 z 에서나 고정폭이었다. 배는 뱃머리·선미로 갈수록 좁아지니
+ * 그 자리의 부품은 선체 옆 허공에 매달려 있었다. 배치 물리(part-support.ts)가
+ * "닿아 있어야 한다"를 요구하는 순간 이건 그냥 버그다.
+ * 1 보다 살짝 작게 곱해 껍데기에 살짝 파묻히게 한다.
+ */
+const SIDE_SINK = 0.92;
+
+function sideOffsetAt(z: number): number {
+  return hullHalfWidthAt(z) * SIDE_SINK;
+}
 
 /** 구역별 격자 규격 */
 interface ZoneGrid {
@@ -53,13 +75,16 @@ const ZONES: Record<PartZone, ZoneGrid> = {
     cols: 2,
     rows: 4,
     perLayer: 8,
-    place: (col, row, layer) => ({
-      x: (col === 0 ? -1 : 1) * (HALF_B * 0.88),
-      y: DECK_Y - 0.28 + layer * 0.42,
-      z: (row - 1.5) * (HULL.length * 0.17),
-      rotY: col === 0 ? -Math.PI / 2 : Math.PI / 2,
-      scale: 1 - Math.min(0.25, layer * 0.07),
-    }),
+    place: (col, row, layer) => {
+      const z = (row - 1.5) * (HULL.length * 0.17);
+      return {
+        x: (col === 0 ? -1 : 1) * sideOffsetAt(z),
+        y: DECK_Y - 0.28 + layer * 0.42,
+        z,
+        rotY: col === 0 ? -Math.PI / 2 : Math.PI / 2,
+        scale: 1 - Math.min(0.25, layer * 0.07),
+      };
+    },
   },
   // 돛대 — 위로만 쌓인다
   mast: {
@@ -150,8 +175,10 @@ const clamp = (v: number, [lo, hi]: [number, number]): number => (v < lo ? lo : 
 /** 끌어 놓은 자리를 구역 안으로 밀어 넣는다 */
 export function clampToZone(zone: PartZone, x: number, y: number, z: number): [number, number, number] {
   const b = ZONE_BOUNDS[zone];
-  const cx = b.snapSides === true ? Math.sign(x || 1) * HALF_B * 0.88 : clamp(x, b.x);
-  return [cx, clamp(y, b.y), clamp(z, b.z)];
+  // z 를 먼저 확정해야 한다 — 현측은 그 z 에서의 선체 폭이 x 를 정한다
+  const cz = clamp(z, b.z);
+  const cx = b.snapSides === true ? Math.sign(x || 1) * sideOffsetAt(cz) : clamp(x, b.x);
+  return [cx, clamp(y, b.y), cz];
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +209,34 @@ function piecesFor(kind: PartKind): PartPiece[] {
   const built = build(kind);
   cache[kind] = built;
   return built;
+}
+
+/**
+ * 부품 한 종류가 차지하는 로컬 상자. 배치 모드 테두리가 이걸 감싼다.
+ * 조각마다 위치·회전이 따로 있으니 각 조각의 상자를 옮겨 놓고 합친다.
+ */
+const boundsCache = new Map<PartKind, Box3>();
+
+export function partBounds(kind: PartKind): Box3 {
+  const cached = boundsCache.get(kind);
+  if (cached !== undefined) return cached;
+
+  const box = new Box3();
+  const matrix = new Matrix4();
+  const piece = new Box3();
+  for (const part of piecesFor(kind)) {
+    part.geo.computeBoundingBox();
+    const local = part.geo.boundingBox;
+    if (local === null) continue;
+    piece.copy(local);
+    matrix
+      .makeRotationZ(part.rotZ ?? 0)
+      .setPosition(part.x ?? 0, part.y ?? 0, part.z ?? 0);
+    box.union(piece.applyMatrix4(matrix));
+  }
+
+  boundsCache.set(kind, box);
+  return box;
 }
 
 function build(kind: PartKind): PartPiece[] {
@@ -311,6 +366,12 @@ export function partKey(kind: PartKind, indexOfKind: number): string {
   return `${kind}#${indexOfKind}`;
 }
 
+/** 키에서 부품 종류만. 없는 종류면 null — 저장소에 옛 키가 남아 있을 수 있다 */
+export function kindFromKey(key: string): PartKind | null {
+  const kind = key.split('#')[0] as PartKind;
+  return PART_INFO[kind] === undefined ? null : kind;
+}
+
 /** 파츠 하나를 그룹으로 만들어 준다 */
 export function buildPart(kind: PartKind, zoneIndex: number): Group {
   const group = new Group();
@@ -334,6 +395,7 @@ export function disposePartCache(): void {
   for (const geo of geometries) geo.dispose();
   geometries.length = 0;
   cache = {};
+  boundsCache.clear();
   for (const m of materials.values()) m.dispose();
   materials.clear();
 }

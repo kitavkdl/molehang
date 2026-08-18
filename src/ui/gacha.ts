@@ -18,6 +18,9 @@ import { amount } from './format.ts';
  * 자리가 모자라면 그 자리에서 "무엇을 뽑아낼지" 고르게 한다.
  */
 const SPIN_MS = 2100;
+/** 패널이 뜨는 연출이 끝나고 스핀이 시작되기까지의 숨 고르기 */
+const SETTLE_MS = 260;
+const SPIN_EASE = 'cubic-bezier(0.12, 0.72, 0.12, 1)';
 
 export interface GachaHandlers {
   /** 뽑기 실행 — 부품과 자리 부족 여부를 돌려준다 */
@@ -52,14 +55,21 @@ export class GachaPanel {
   private pending: { drawn: PartKind; needsRoom: boolean } | null = null;
   private chosenRemoval: PartKind | null = null;
   private angle = 0;
+  private labels: HTMLElement[] = [];
 
   constructor(private readonly handlers: GachaHandlers) {
-    this.closeBtn.addEventListener('click', () => {
-      // 결과가 떠 있는데 닫으면 안 된다 — 나온 건 반드시 장착이다
-      if (this.pending !== null || this.spinning) return;
-      this.hide();
+    this.closeBtn.addEventListener('click', () => this.tryClose());
+    // 스크림 탭·Esc 로도 닫힌다 — 단, 결과가 떠 있으면 안 된다(나온 건 반드시 장착이다)
+    this.scrim.addEventListener('click', () => this.tryClose());
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !this.root.hidden) this.tryClose();
     });
     this.confirmBtn.addEventListener('click', () => void this.confirm());
+  }
+
+  private tryClose(): void {
+    if (this.pending !== null || this.spinning) return;
+    this.hide();
   }
 
   /**
@@ -149,14 +159,24 @@ export class GachaPanel {
   private renderWheel(labels: string[]): void {
     const pool = labels;
     this.disc.textContent = '';
+    this.labels = [];
+    // 지난 스핀의 회전이 남아 있으면 새 판이 기울어진 채 열린다 — 소리 없이 0으로 되감는다
+    this.angle = 0;
+    this.disc.style.transition = 'none';
+    this.disc.style.transform = 'rotate(0deg)';
+
     const step = 360 / pool.length;
 
     // 색 조각은 부채꼴로 잘라 내고(clip-path), 글자는 **자르지 않는 별도 층**에 올린다.
-    // 글자를 조각 안에 넣으면 되돌려 세우는 순간 잘려 나간다.
+    // 부채꼴 각도는 조각 수에 따라 매번 계산한다 — 고정 각도를 쓰면 조각 사이가 뚫린다.
+    // 조각은 라벨과 같은 중심각(i*step + step/2)에 세워 포인터가 조각 한가운데에 멈추게 한다.
     pool.forEach((_label, i) => {
       const slice = document.createElement('div');
-      slice.className = `wheel__slice wheel__slice--${i % 4}`;
-      slice.style.transform = `rotate(${i * step}deg)`;
+      // 조각 수가 4k+1 이면 첫 조각과 마지막 조각이 같은 색으로 붙는다 — 마지막만 색을 튼다
+      const color = i === pool.length - 1 && pool.length % 4 === 1 && pool.length > 1 ? (i + 2) % 4 : i % 4;
+      slice.className = `wheel__slice wheel__slice--${color}`;
+      slice.style.clipPath = wedgeClip(step);
+      slice.style.transform = `rotate(${i * step + step / 2}deg)`;
       this.disc.append(slice);
     });
 
@@ -171,6 +191,7 @@ export class GachaPanel {
       label.style.top = `${50 - Math.cos(rad) * radius}%`;
       label.textContent = text;
       this.disc.append(label);
+      this.labels.push(label);
     });
   }
 
@@ -180,22 +201,75 @@ export class GachaPanel {
     return this.spinToIndex(pool.length, Math.max(0, pool.indexOf(drawn)));
   }
 
-  private spinToIndex(count: number, index: number): Promise<void> {
+  /** disc 는 시계 방향으로, 라벨은 그만큼 반대로 돌려 글자를 항상 똑바로 세운다 */
+  private applyAngle(transition: string): void {
+    this.disc.style.transition = transition;
+    this.disc.style.transform = `rotate(${this.angle}deg)`;
+    for (const label of this.labels) {
+      label.style.transition = transition === 'none' ? 'none' : transition;
+      label.style.transform = `translate(-50%, -50%) rotate(${-this.angle}deg)`;
+    }
+  }
+
+  private async spinToIndex(count: number, index: number): Promise<void> {
     const step = 360 / count;
     // 슬라이스 중앙이 12시(포인터)에 오도록
     const target = 360 - (index * step + step / 2);
-    this.angle += 360 * 5 + ((target - (this.angle % 360)) + 360) % 360;
+
+    const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+    const spinMs = reduced ? 420 : SPIN_MS;
+    const turns = reduced ? 1 : 5;
 
     this.spinning = true;
-    this.disc.style.transition = `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.72, 0.12, 1)`;
-    this.disc.style.transform = `rotate(${this.angle}deg)`;
 
-    return new Promise((resolve) => {
-      globalThis.setTimeout(() => {
-        this.spinning = false;
-        resolve();
-      }, SPIN_MS + 60);
+    // 패널이 방금 hidden 에서 풀려 아직 페인트 전일 수 있다. 그 상태에서 최종 각도를
+    // 넣으면 브라우저가 시작 상태를 본 적이 없어 transition 이 통째로 생략된다(= 원판이
+    // 순간이동한다). 시작 각도를 먼저 못박고, 강제 리플로우 + 한 프레임을 기다린다.
+    this.applyAngle('none');
+    void this.disc.offsetWidth;
+    await nextFrame();
+    await nextFrame();
+    // 패널 등장 연출이 끝난 뒤 돌기 시작해야 스핀의 처음부터 보인다
+    await delay(SETTLE_MS);
+
+    this.angle += 360 * turns + ((target - (this.angle % 360)) + 360) % 360;
+    this.applyAngle(`transform ${spinMs}ms ${SPIN_EASE}`);
+
+    await delay(spinMs + 80);
+    this.spinning = false;
+  }
+
+  /**
+   * 새로고침으로 날아간 뽑기 결과를 복구한다 — 고철은 이미 썼으므로 장착을 끝까지 받아낸다.
+   * 돌림판은 스핀 없이 결과 위치에 멈춰 세워 둔다.
+   */
+  resume(tier: PartTier, kind: PartKind, needsRoom: boolean, removable: PartKind[]): void {
+    if (this.spinning || !this.root.hidden) return;
+
+    this.pending = null;
+    this.chosenRemoval = null;
+    this.result.hidden = true;
+    this.room.hidden = true;
+    this.confirmBtn.hidden = true;
+    this.closeBtn.disabled = true;
+    this.title.textContent = t(`gacha.${tier}`);
+    this.note.textContent = t('gacha.mustEquip');
+
+    this.buildWheel(tier);
+    const pool = kindsOfTier(tier);
+    const step = 360 / pool.length;
+    this.angle = 360 - (Math.max(0, pool.indexOf(kind)) * step + step / 2);
+    this.applyAngle('none');
+
+    this.root.hidden = false;
+    this.scrim.hidden = false;
+    requestAnimationFrame(() => {
+      this.root.classList.add('is-open');
+      this.scrim.classList.add('is-open');
     });
+
+    this.pending = { drawn: kind, needsRoom };
+    this.showResult(kind, needsRoom, removable);
   }
 
   private showResult(kind: PartKind, needsRoom: boolean, removable: PartKind[]): void {
@@ -289,6 +363,32 @@ function stat(label: string, value: string): HTMLElement {
 
 export function drawButtonLabel(tier: PartTier, cost: number): string {
   return `${t(`gacha.${tier}`)} · ${amount(cost)}`;
+}
+
+/**
+ * 중심각 stepDeg 의 부채꼴 clip-path.
+ * 꼭짓점을 원 밖(반지름의 1.5배)까지 뻗고, 호는 30° 간격으로 쪼개 현이 원 안으로
+ * 파고들지 않게 한다 — 원반의 overflow:hidden 이 바깥을 잘라 준다.
+ */
+function wedgeClip(stepDeg: number): string {
+  if (stepDeg >= 360) return 'none';
+  const half = stepDeg / 2;
+  const r = 75;
+  const points = ['50% 50%'];
+  const n = Math.max(2, Math.ceil(stepDeg / 30) + 1);
+  for (let i = 0; i < n; i++) {
+    const a = ((-half + (stepDeg * i) / (n - 1)) * Math.PI) / 180;
+    points.push(`${(50 + Math.sin(a) * r).toFixed(2)}% ${(50 - Math.cos(a) * r).toFixed(2)}%`);
+  }
+  return `polygon(${points.join(', ')})`;
+}
+
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 }
 
 function must(id: string): HTMLElement {

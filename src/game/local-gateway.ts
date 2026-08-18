@@ -25,10 +25,14 @@ import {
 } from './parts.ts';
 
 /**
- * localStorage 구현.
+ * 게스트 저장 — **sessionStorage** 구현.
  *
  * "마지막 정산 시각"만 저장해 두면 앱이 꺼져 있던 동안의 축적도
  * 다음 부팅 때 accrue() 한 번으로 그대로 재현된다 = 오프라인 축적.
+ *
+ * 게스트 기록은 **탭을 닫으면 사라진다.** 새로고침·로그인 리로드에는 살아남지만
+ * 사이트를 떠나면 끝이다. 계정으로 남기고 싶으면 로그인하면 되고,
+ * 그때 지금까지 만든 배가 통째로 계정으로 옮겨 간다. (ui/account.ts)
  */
 export class LocalGateway implements MolehangGateway {
   private state: PersistedState;
@@ -93,8 +97,9 @@ export class LocalGateway implements MolehangGateway {
     return { state: this.snapshot(), taken, entry };
   }
 
-  async draw(tier: PartTier, now: number): Promise<DrawOutcome> {
-    await this.sync(now, 1);
+  async draw(tier: PartTier, now: number, multiplier = 1): Promise<DrawOutcome> {
+    // 정산에 선단 배율을 그대로 태운다 — 1로 굳히면 뽑을 때마다 보너스 축적분이 증발한다
+    await this.sync(now, multiplier);
     const cost = gachaCost(tier, this.state.pulls[tier]);
     if (this.state.scrap < cost) {
       return { state: this.snapshot(), drawn: null, needsRoom: false };
@@ -110,8 +115,13 @@ export class LocalGateway implements MolehangGateway {
     return { state: this.snapshot(), drawn, needsRoom: need > free };
   }
 
-  async install(kind: PartKind, remove: PartKind | null, now: number): Promise<InstallOutcome> {
-    await this.sync(now, 1);
+  async install(
+    kind: PartKind,
+    remove: PartKind | null,
+    now: number,
+    multiplier = 1,
+  ): Promise<InstallOutcome> {
+    await this.sync(now, multiplier);
 
     if (remove !== null && this.state.parts[remove] > 0) {
       this.state.parts[remove] -= 1;
@@ -163,8 +173,8 @@ export class LocalGateway implements MolehangGateway {
     return this.snapshot();
   }
 
-  async receiveGift(now: number, scrap: number): Promise<PersistedState> {
-    await this.sync(now, 1);
+  async receiveGift(now: number, scrap: number, multiplier = 1): Promise<PersistedState> {
+    await this.sync(now, multiplier);
     this.state.scrap += Math.max(0, Math.round(scrap));
     this.write();
     return this.snapshot();
@@ -230,9 +240,19 @@ export class LocalGateway implements MolehangGateway {
     };
   }
 
+  /** 계정으로 옮긴 뒤 게스트 흔적을 지운다 — 로그아웃했을 때 유령 배가 되살아나지 않게 */
+  clearSave(): void {
+    this.state = fresh(Date.now());
+    try {
+      this.storage?.removeItem(this.storageKey);
+    } catch {
+      // 못 지워도 탭을 닫으면 어차피 사라진다
+    }
+  }
+
   private read(): PersistedState {
     const now = Date.now();
-    const raw = this.storage?.getItem(this.storageKey);
+    const raw = this.storage?.getItem(this.storageKey) ?? adoptOldLocalSave(this.storageKey);
     if (!raw) return fresh(now);
 
     try {
@@ -330,13 +350,32 @@ function isEntry(v: unknown): v is CollectLogEntry {
   return typeof e.id === 'string' && typeof e.at === 'number' && typeof e.amount === 'number';
 }
 
+/**
+ * 게스트 저장소는 sessionStorage 다 — 탭을 닫으면 게스트 기록도 같이 사라진다.
+ * 새로고침과 로그인 직후 리로드는 같은 탭이라 그대로 살아남는다.
+ */
 function safeStorage(): Storage | null {
   try {
-    const s = globalThis.localStorage;
+    const s = globalThis.sessionStorage;
     const probe = '__mh__';
     s.setItem(probe, '1');
     s.removeItem(probe);
     return s;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 게스트 저장이 localStorage 에 있던 시절의 세이브를 한 번만 주워 온다.
+ * 규칙이 바뀌었다고 어제까지 키우던 배가 새로고침 한 번에 증발하면 안 된다.
+ * 옮겨 온 원본은 바로 지운다 — 두 번 주워 오면 사라진 줄 알았던 배가 되살아난다.
+ */
+function adoptOldLocalSave(key: string): string | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(key) ?? null;
+    if (raw !== null) globalThis.localStorage.removeItem(key);
+    return raw;
   } catch {
     return null;
   }

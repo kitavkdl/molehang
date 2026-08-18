@@ -119,7 +119,7 @@
       </div>
 
       <div class="gacha__actions">
-        <button class="ghost-btn" id="gacha-close" type="button">닫기</button>
+        <button class="ghost-btn" id="gacha-close" type="button" data-i18n="common.close">닫기</button>
         <button class="gacha__confirm" id="gacha-confirm" type="button" hidden>장착하기</button>
       </div>
     </section>
@@ -129,14 +129,14 @@
     <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="항해 기록" hidden>
       <div class="sheet__grip" id="sheet-grip"></div>
       <div class="sheet__head">
-        <h2 class="sheet__title" id="sheet-title">항해 기록</h2>
-        <button class="sheet__close" id="close-sheet" type="button" aria-label="닫기">✕</button>
+        <h2 class="sheet__title" id="sheet-title" data-i18n="sheet.title">항해 기록</h2>
+        <button class="sheet__close" id="close-sheet" type="button" aria-label="닫기" data-i18n-aria="common.close">✕</button>
       </div>
 
       <div class="sheet__scroll">
         <div class="sheet__stats" id="sheet-stats"></div>
 
-        <h3 class="sheet__section" id="sec-ship">지금 이 배</h3>
+        <h3 class="sheet__section" id="sec-ship" data-i18n="sheet.sectionShip">지금 이 배</h3>
         <div class="ship-card">
           <div class="ship-card__name" id="ship-title-name">떠다니는 뗏목</div>
           <div class="ship-card__hint" id="ship-title-hint">시작은 다 이렇다</div>
@@ -145,7 +145,7 @@
         </div>
         <ul class="parts" id="parts"></ul>
 
-        <h3 class="sheet__section" id="sec-theme">바다 테마 <span class="sheet__count" id="theme-count"></span></h3>
+        <h3 class="sheet__section" id="sec-theme"><span data-i18n="sheet.sectionTheme">바다 테마</span> <span class="sheet__count" id="theme-count"></span></h3>
         <div class="theme-card">
           <p class="theme-card__lead" id="theme-lead"></p>
           <ul class="theme-list" id="theme-list"></ul>
@@ -155,29 +155,29 @@
           </button>
         </div>
 
-        <h3 class="sheet__section" id="sec-crew">선단 <span class="sheet__count" id="crew-size"></span></h3>
+        <h3 class="sheet__section" id="sec-crew"><span data-i18n="sheet.sectionCrew">선단</span> <span class="sheet__count" id="crew-size"></span></h3>
         <div class="crew-card">
           <p class="crew-card__lead" id="crew-lead"></p>
           <ul class="crew-list" id="crew-list"></ul>
           <div class="crew-card__code">
-            <span class="crew-card__label" id="crew-code-label">초대 코드</span>
+            <span class="crew-card__label" id="crew-code-label" data-i18n="crew.code">초대 코드</span>
             <strong class="crew-card__value" id="crew-code">------</strong>
           </div>
           <div class="crew-card__actions">
-            <button class="ghost-btn" id="crew-copy" type="button">초대 링크 복사</button>
-            <button class="ghost-btn" id="crew-join" type="button">코드로 합류</button>
+            <button class="ghost-btn" id="crew-copy" type="button" data-i18n="crew.copy">초대 링크 복사</button>
+            <button class="ghost-btn" id="crew-join" type="button" data-i18n="crew.join">코드로 합류</button>
           </div>
-          <p class="crew-card__note" id="crew-note"></p>
+          <p class="crew-card__note" id="crew-note" data-i18n="crew.note"></p>
         </div>
 
-        <h3 class="sheet__section" id="sec-titles">칭호 <span class="sheet__count" id="titles-count"></span></h3>
+        <h3 class="sheet__section" id="sec-titles"><span data-i18n="sheet.sectionTitles">칭호</span> <span class="sheet__count" id="titles-count"></span></h3>
         <ul class="titles" id="titles"></ul>
 
-        <h3 class="sheet__section" id="sec-log">수거 기록</h3>
+        <h3 class="sheet__section" id="sec-log" data-i18n="sheet.sectionLog">수거 기록</h3>
         <ul class="log" id="log"></ul>
         <p class="log__empty" id="log-empty"></p>
 
-        <button class="ghost-btn" id="replay-tutorial" type="button">튜토리얼 다시 보기</button>
+        <button class="ghost-btn" id="replay-tutorial" type="button" data-i18n="sheet.replayTutorial">튜토리얼 다시 보기</button>
       </div>
     </section>
 
@@ -185,21 +185,22 @@
     <div class="scrim scrim--gacha" id="account-scrim" hidden></div>
     <section class="account" id="account" role="dialog" aria-modal="true" hidden>
       <div class="account__head">
-        <h2 class="account__title" id="account-title">계정</h2>
-        <button class="sheet__close" id="account-close" type="button" aria-label="닫기">✕</button>
+        <h2 class="account__title" id="account-title" data-i18n="auth.title">계정</h2>
+        <button class="sheet__close" id="account-close" type="button" aria-label="닫기" data-i18n-aria="common.close">✕</button>
       </div>
 
       <!-- 게스트: 이메일 입력 -->
       <div class="account__pane" id="account-guest">
-        <p class="account__lead" id="account-guest-lead">
-          게스트로도 전부 즐길 수 있어요. 로그인하면 기기를 옮겨도 배가 남고, 여러 척을 굴릴 수 있습니다.
+        <p class="account__lead" id="account-guest-lead" data-i18n="auth.guestLead">
+          게스트로도 전부 즐길 수 있어요. 다만 게스트 기록은 창을 닫으면 사라집니다.
+          로그인하면 지금 이 배가 그대로 계정으로 옮겨 가고, 기기를 옮겨도 남아요.
         </p>
         <label class="field">
-          <span class="field__label" id="account-email-label">이메일</span>
+          <span class="field__label" id="account-email-label" data-i18n="auth.email">이메일</span>
           <input class="field__input" id="account-email" type="email" inputmode="email"
                  autocomplete="email" placeholder="you@example.com" />
         </label>
-        <button class="account__primary" id="account-send" type="button">인증코드 받기</button>
+        <button class="account__primary" id="account-send" type="button" data-i18n="auth.sendCode">인증코드 받기</button>
         <p class="account__hint" id="account-guest-hint"></p>
       </div>
 
@@ -207,14 +208,14 @@
       <div class="account__pane" id="account-code" hidden>
         <p class="account__lead" id="account-code-lead"></p>
         <label class="field">
-          <span class="field__label" id="account-code-label">인증코드 6자리</span>
+          <span class="field__label" id="account-code-label" data-i18n="auth.codeLabel">인증코드 6자리</span>
           <input class="field__input field__input--code" id="account-otp" type="text"
                  inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" />
         </label>
-        <button class="account__primary" id="account-verify" type="button">확인</button>
+        <button class="account__primary" id="account-verify" type="button" data-i18n="auth.verify">확인</button>
         <div class="account__row">
-          <button class="ghost-btn" id="account-resend" type="button">코드 다시 보내기</button>
-          <button class="ghost-btn" id="account-back" type="button">이메일 바꾸기</button>
+          <button class="ghost-btn" id="account-resend" type="button" data-i18n="auth.resend">코드 다시 보내기</button>
+          <button class="ghost-btn" id="account-back" type="button" data-i18n="auth.changeEmail">이메일 바꾸기</button>
         </div>
         <p class="account__hint" id="account-code-hint"></p>
       </div>
@@ -223,9 +224,9 @@
       <div class="account__pane" id="account-ships" hidden>
         <p class="account__lead" id="account-user"></p>
         <ul class="ships" id="ship-list"></ul>
-        <button class="account__primary" id="ship-new" type="button">새 배 만들기</button>
+        <button class="account__primary" id="ship-new" type="button" data-i18n="auth.newShip">새 배 만들기</button>
         <div class="account__row">
-          <button class="ghost-btn" id="account-signout" type="button">로그아웃</button>
+          <button class="ghost-btn" id="account-signout" type="button" data-i18n="auth.signOut">로그아웃</button>
         </div>
         <p class="account__hint" id="account-ships-hint"></p>
       </div>

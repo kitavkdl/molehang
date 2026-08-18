@@ -232,7 +232,7 @@ export class Game {
   /** 뽑기. 고철이 모자라면 null */
   async draw(tier: PartTier): Promise<DrawEvent | null> {
     if (!this.ready) return null;
-    const outcome = await this.gateway.draw(tier, this.clock.now());
+    const outcome = await this.gateway.draw(tier, this.clock.now(), this.multiplier());
     this.persisted = outcome.state;
     this.emitChange(this.snapshot());
     if (outcome.drawn === null) return null;
@@ -251,7 +251,7 @@ export class Game {
   /** 장착 확정. 자리가 모자랐다면 remove 로 하나 빼고 넣는다 */
   async install(kind: PartKind, remove: PartKind | null = null): Promise<InstallOutcome | null> {
     if (!this.ready) return null;
-    const outcome = await this.gateway.install(kind, remove, this.clock.now());
+    const outcome = await this.gateway.install(kind, remove, this.clock.now(), this.multiplier());
     this.persisted = outcome.state;
     this.emitChange(this.snapshot());
     return outcome;
@@ -358,7 +358,7 @@ export class Game {
 
   private async applyGift(gift: CrewGift): Promise<void> {
     if (!this.ready) return;
-    this.persisted = await this.gateway.receiveGift(this.clock.now(), gift.scrap);
+    this.persisted = await this.gateway.receiveGift(this.clock.now(), gift.scrap, this.multiplier());
     this.emitChange(this.snapshot());
     for (const fn of this.giftListeners) fn(gift);
   }

@@ -228,6 +228,19 @@ async function main() {
       await context.close();
     }
 
+    // --- 배치 모드 · 밤 (테두리는 조명을 안 받는다 — 어둠에 같이 잠기면 조작이 안 보인다) ---
+    {
+      const { page, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=night&parts=chimney*2,cannon,barrel'),
+      );
+      await page.click('#arrange-toggle');
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: path.join(OUT, 'arrange-night.png') });
+      await context.close();
+    }
+
     // --- 계정 ---
     {
       const { page, context } = await openScene(browser, MOBILE_CTX, url('phase=dusk&res=200'));

@@ -6,10 +6,11 @@ import {
   emptyInventory,
   type Inventory,
 } from '../game/parts.ts';
-import { BOAT_COLORS, type PaletteKey } from '../style/palette.ts';
-import { flat, type FlatMaterial } from './flat-material.ts';
+import { ARRANGE_COLORS, BOAT_COLORS, type PaletteKey } from '../style/palette.ts';
+import { flat, flatUnlit, type FlatMaterial } from './flat-material.ts';
 import {
   BOAT_YAW,
+  FITTINGS,
   HULL,
   boxGeometry,
   buildHull,
@@ -19,6 +20,7 @@ import {
 } from './hull.ts';
 import type { ArrangeTarget } from './arrange.ts';
 import { sampleWave } from './ocean.ts';
+import { buildPartOutline, disposePartOutlines } from './part-outline.ts';
 import { buildPart, partKey } from './part-sockets.ts';
 
 export { BOAT_YAW, HULL } from './hull.ts';
@@ -44,6 +46,12 @@ export class Boat {
   private previous: Inventory = emptyInventory();
   private placements: Record<string, [number, number, number]> = {};
   private signature = '';
+  /** 부품 키 → 그 부품을 감싸는 테두리 */
+  private readonly outlines = new Map<string, Mesh>();
+  private outlineIdle: FlatMaterial;
+  private outlinePicked: FlatMaterial;
+  private arrangeMode = false;
+  private pickedKey: string | null = null;
   /** 방금 붙어서 튀어 오르는 중인 파츠들 */
   private readonly popping: Array<{ object: Object3D; t: number; scale: number }> = [];
 
@@ -69,29 +77,50 @@ export class Boat {
     add(deck, BOAT_COLORS.deck, 'deck');
     add(rail, BOAT_COLORS.rail, 'rail');
 
-    const mastHeight = 3.7;
-    const mast = add(new CylinderGeometry(0.055, 0.085, mastHeight, 6, 1), BOAT_COLORS.mast, 'mast');
-    mast.position.set(0, spec.freeboard + mastHeight / 2 - 0.14, 0.5);
+    // 치수는 전부 hull.ts 의 FITTINGS 에서 온다 — 부품이 무엇에 닿는지 계산하는
+    // part-support.ts 가 같은 숫자를 봐야 하기 때문이다.
+    const { mast: M, sail: S, stripe: T, flag: F, crate: C, crateTrim: CT } = FITTINGS;
 
-    const sailY = spec.freeboard + 0.3;
-    const sail = add(sailGeometry(3.0, 2.75, 0.56), BOAT_COLORS.sail, 'sail');
-    sail.position.set(0, sailY, 0.45);
+    const mast = add(
+      new CylinderGeometry(M.top, M.bottom, M.height, 6, 1),
+      BOAT_COLORS.mast,
+      'mast',
+    );
+    mast.position.set(0, spec.freeboard + M.height / 2 - M.drop, M.z);
+
+    const sailY = spec.freeboard + S.rise;
+    const sail = add(sailGeometry(S.height, S.chord, S.bulge), BOAT_COLORS.sail, 'sail');
+    sail.position.set(0, sailY, S.z);
 
     // 같은 곡면의 u 구간을 잘라 만든 가로 띠.
     // 돛보다 현(chord)을 길게 잡아 뒷변이 돛 밖으로 살짝 나가야
     // 가운데만 뜨는 '얼룩'이 아니라 꿰맨 띠처럼 보인다.
-    const stripe = add(sailGeometry(3.0, 2.94, 0.585, 0.44, 0.58), BOAT_COLORS.sailStripe, 'stripe');
-    stripe.position.set(0, sailY, 0.45);
+    const stripe = add(
+      sailGeometry(S.height, T.chord, T.bulge, T.u0, T.u1),
+      BOAT_COLORS.sailStripe,
+      'stripe',
+    );
+    stripe.position.set(0, sailY, S.z);
 
-    const flag = add(flagGeometry(0.62), BOAT_COLORS.rail, 'flag');
-    flag.position.set(0, spec.freeboard + mastHeight - 0.74, 0.5);
+    const flag = add(flagGeometry(F.size), BOAT_COLORS.rail, 'flag');
+    flag.position.set(0, spec.freeboard + M.height - F.drop, M.z);
 
     // 수거한 자원이 빨려 들어가는 나무 상자
-    this.crate = add(boxGeometry(0.86, 0.64, 0.8), BOAT_COLORS.crate, 'crate');
-    this.crate.position.set(0, spec.freeboard + 0.32, -1.6);
+    this.crate = add(boxGeometry(C.width, C.height, C.depth), BOAT_COLORS.crate, 'crate');
+    this.crate.position.set(0, spec.freeboard + C.rise, C.z);
 
-    const trim = add(boxGeometry(0.93, 0.12, 0.87), BOAT_COLORS.crateTrim, 'crate-trim');
-    trim.position.set(0, spec.freeboard + 0.64, -1.6);
+    const trim = add(
+      boxGeometry(CT.width, CT.height, CT.depth),
+      BOAT_COLORS.crateTrim,
+      'crate-trim',
+    );
+    trim.position.set(0, spec.freeboard + CT.rise, C.z);
+
+    // 배치 모드 테두리 — 조명을 안 받는다. 밤이면 배는 어둠에 잠기는 게 맞지만
+    // "이건 옮길 수 있다"는 표식까지 잠기면 조작이 보이지 않는다.
+    this.outlineIdle = flatUnlit(ARRANGE_COLORS.edge);
+    this.outlinePicked = flatUnlit(ARRANGE_COLORS.picked);
+    this.materials.push(this.outlineIdle, this.outlinePicked);
 
     this.body.add(this.rig);
     this.body.rotation.y = BOAT_YAW;
@@ -118,6 +147,7 @@ export class Boat {
     for (const obj of this.mounted) this.rig.remove(obj);
     this.mounted = [];
     this.parts = [];
+    this.outlines.clear();
     this.popping.length = 0;
     this.placements = placements;
 
@@ -134,6 +164,11 @@ export class Boat {
           const custom = placements[key];
           if (custom !== undefined) object.position.set(custom[0], custom[1], custom[2]);
 
+          // 테두리는 부품의 **자식**이다 — 끌어 옮기면 알아서 따라간다
+          const outline = buildPartOutline(kind, this.outlineIdle);
+          object.add(outline);
+          this.outlines.set(key, outline);
+
           this.rig.add(object);
           this.mounted.push(object);
           this.parts.push({ object, key, zone });
@@ -149,11 +184,37 @@ export class Boat {
 
     this.previous = { ...inventory };
     this.signature = signature;
+    // 배치 중에 부품이 다시 깔릴 수 있다(자리를 저장한 직후 등) — 표식 상태를 다시 입힌다
+    this.applyOutlines();
   }
 
   /** 배치 모드에서 끌 수 있는 부품들 */
   get arrangeTargets(): ArrangeTarget[] {
     return this.parts;
+  }
+
+  /**
+   * 배치 모드 표식 켜기/끄기.
+   * 켜면 옮길 수 있는 부품 **전부**에 테두리가 뜬다 — 무엇이 대상인지 화면만 보고 알게.
+   */
+  setArrangeMode(active: boolean): void {
+    this.arrangeMode = active;
+    if (!active) this.pickedKey = null;
+    this.applyOutlines();
+  }
+
+  /** 지금 집고 있는 부품 하나만 색을 바꾼다 */
+  setPickedPart(key: string | null): void {
+    this.pickedKey = key;
+    this.applyOutlines();
+  }
+
+  private applyOutlines(): void {
+    for (const [key, mesh] of this.outlines) {
+      mesh.visible = this.arrangeMode;
+      mesh.material = key === this.pickedKey ? this.outlinePicked : this.outlineIdle;
+      if (!this.arrangeMode) mesh.scale.setScalar(1);
+    }
   }
 
   /** 배 로컬 좌표계의 기준 — 드래그 좌표 변환에 쓴다 */
@@ -194,6 +255,14 @@ export class Boat {
       }
     }
 
+    // 배치 표식은 천천히 숨을 쉰다 — 멈춰 있는 테두리보다 훨씬 먼저 눈에 띈다
+    if (this.arrangeMode) {
+      const pulse = 1 + 0.06 * Math.sin(elapsed * 4.4);
+      for (const [key, mesh] of this.outlines) {
+        mesh.scale.setScalar(key === this.pickedKey ? pulse + 0.09 : pulse);
+      }
+    }
+
     this.crate.getWorldPosition(this.crateWorld);
   }
 
@@ -210,5 +279,6 @@ export class Boat {
   dispose(): void {
     for (const g of this.geometries) g.dispose();
     for (const m of this.materials) m.dispose();
+    disposePartOutlines();
   }
 }

@@ -12,7 +12,13 @@ import { CrewSession } from './game/crew-session.ts';
 import { Game, type GameSnapshot } from './game/game.ts';
 import { LocalGateway } from './game/local-gateway.ts';
 import type { MolehangGateway } from './game/gateway.ts';
-import { PART_KINDS, type PartKind, type PartTier } from './game/parts.ts';
+import {
+  PART_INFO,
+  PART_KINDS,
+  removableKinds,
+  type PartKind,
+  type PartTier,
+} from './game/parts.ts';
 import { applyStatic, locale, setLocale, t } from './i18n/index.ts';
 import { Auth } from './net/auth.ts';
 import { createCrewChannel } from './net/crew-channel.ts';
@@ -143,14 +149,50 @@ function boot(): void {
     await sheet.show();
   }
 
+  /**
+   * 뽑기는 "고철 차감 → 돌림판 → 장착 확정"이 여러 단계라, 중간에 새로고침하면
+   * 고철만 쓰고 부품을 잃는다. 뽑힌 부품을 저장해 뒀다가 다음 부팅 때 장착을 마저 받는다.
+   * 저장 범위는 배 단위 — 게스트 좌석·계정 배가 서로 섞이면 안 된다.
+   */
+  let pendingDrawKey = `molehang.pendingDraw.${seat === null ? 'local' : `local.${seat}`}`;
+  // 게스트 세이브는 sessionStorage 에 산다 — 복구 기록도 같은 수명을 가져야
+  // 세이브가 사라진 뒤 유령 뽑기가 되살아나 공짜 부품이 생기지 않는다.
+  let pendingDrawStore: () => Storage | undefined = () => globalThis.sessionStorage;
+  const savePendingDraw = (kind: PartKind): void => {
+    try {
+      pendingDrawStore()?.setItem(pendingDrawKey, kind);
+    } catch {
+      // 저장 못 하면 복구도 없다 — 게임은 계속 굴러간다
+    }
+  };
+  const takePendingDraw = (): PartKind | null => {
+    try {
+      const raw = pendingDrawStore()?.getItem(pendingDrawKey);
+      return raw !== null && raw !== undefined && (PART_KINDS as readonly string[]).includes(raw)
+        ? (raw as PartKind)
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const clearPendingDraw = (): void => {
+    try {
+      pendingDrawStore()?.removeItem(pendingDrawKey);
+    } catch {
+      // 무시
+    }
+  };
+
   const gacha = new GachaPanel({
     draw: async (tier) => {
       const event = await game.draw(tier);
       if (event === null) return null;
+      savePendingDraw(event.drawn);
       return { drawn: event.drawn, needsRoom: event.needsRoom, removable: event.removable };
     },
     install: async (kind, remove) => {
       const outcome = await game.install(kind, remove);
+      clearPendingDraw();
       if (outcome === null) return;
       const snap = game.snapshot();
       paint(snap);
@@ -210,7 +252,10 @@ function boot(): void {
 
   const account = new AccountPanel(
     auth,
-    () => local.snapshotForImport(),
+    {
+      snapshot: () => local.snapshotForImport(),
+      clear: () => local.clearSave(),
+    },
     // 로그인·배 전환은 게이트웨이 자체가 바뀌는 일이라, 상태를 이어 붙이는 대신
     // 새로 부팅한다. 훨씬 단순하고 어긋날 여지가 없다.
     () => globalThis.location.reload(),
@@ -226,6 +271,9 @@ function boot(): void {
           if (shipId !== null) {
             gateway = new SupabaseGateway(shipId, GAME_CONFIG);
             game.useGateway(gateway);
+            pendingDrawKey = `molehang.pendingDraw.ship.${shipId}`;
+            // 계정 배는 브라우저를 껐다 켜도 남는다 — 복구 기록도 같이 남긴다
+            pendingDrawStore = () => globalThis.localStorage;
           }
         }
       } catch (err) {
@@ -284,6 +332,19 @@ function boot(): void {
 
     if (!params.has('notutorial')) tutorial.autoStart();
 
+    // 지난 세션에서 뽑아 놓고 장착하지 못한 부품이 있으면 결과 화면부터 다시 띄운다
+    const savedDraw = takePendingDraw();
+    if (savedDraw !== null) {
+      const s = game.snapshot();
+      const free = s.slotsMax - s.slotsUsed;
+      gacha.resume(
+        PART_INFO[savedDraw].tier,
+        savedDraw,
+        PART_INFO[savedDraw].slots > free,
+        removableKinds(s.parts).sort((a, b) => PART_INFO[b].slots - PART_INFO[a].slots),
+      );
+    }
+
     window.__MOLEHANG_READY__ = true;
   })();
 
@@ -318,6 +379,7 @@ function boot(): void {
     },
     crewMultiplier: () => game.snapshot().crewMultiplier,
     async reset() {
+      clearPendingDraw();
       paint(await game.reset());
       await sheet.refresh();
     },

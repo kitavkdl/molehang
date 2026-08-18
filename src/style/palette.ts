@@ -210,6 +210,19 @@ export const FX_COLORS = {
   foamBright: 'cream',
 } as const satisfies Record<string, PaletteKey>;
 
+/**
+ * 배치 모드에서 부품을 감싸는 테두리 색.
+ *
+ * 배 어디에도 안 쓰는 두 색을 골랐다 — 부품(강철·나무·크림)이나 바다 위에 겹쳐도
+ * 테두리가 부품 색으로 읽히면 "만질 수 있다"는 신호가 죽는다.
+ */
+export const ARRANGE_COLORS = {
+  /** 옮길 수 있는 부품 전부 */
+  edge: 'blossom',
+  /** 지금 집고 있는 하나 */
+  picked: 'sun',
+} as const satisfies Record<string, PaletteKey>;
+
 // ---------------------------------------------------------------------------
 // UI — CSS 커스텀 프로퍼티로 주입
 // ---------------------------------------------------------------------------
