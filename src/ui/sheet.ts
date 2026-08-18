@@ -1,4 +1,11 @@
 import type { Clock } from '../core/clock.ts';
+import {
+  AVATAR_HATS,
+  AVATAR_OUTFITS,
+  type AvatarHat,
+  type AvatarOutfit,
+  type AvatarSpec,
+} from '../game/avatar.ts';
 import { CREW_MAX, bonusLabel } from '../game/crew.ts';
 import type { GameSnapshot } from '../game/game.ts';
 import type { CollectLogEntry } from '../game/gateway.ts';
@@ -47,6 +54,11 @@ export class LogSheet {
   private readonly themeDraw = must('theme-draw') as HTMLButtonElement;
   private readonly themeDrawLabel = must('theme-draw-label');
   private readonly themeCostEl = must('theme-cost');
+  private readonly avatarLead = must('avatar-lead');
+  private readonly avatarHatLabel = must('avatar-hat-label');
+  private readonly avatarOutfitLabel = must('avatar-outfit-label');
+  private readonly avatarHats = must('avatar-hats');
+  private readonly avatarOutfits = must('avatar-outfits');
 
   private open = false;
 
@@ -63,6 +75,11 @@ export class LogSheet {
     private readonly themeActions: {
       draw: () => void;
       select: (id: ThemeId) => void;
+    },
+    private readonly avatarActions: {
+      current: () => AvatarSpec;
+      setHat: (hat: AvatarHat) => void;
+      setOutfit: (outfit: AvatarOutfit) => void;
     },
   ) {
     this.themeDraw.addEventListener('click', () => themeActions.draw());
@@ -167,6 +184,9 @@ export class LogSheet {
       this.themeList.append(li);
     }
 
+    // --- 선장 아바타 ---
+    this.renderAvatar();
+
     // --- 선단 ---
     this.crewSize.textContent = `${snap.crewSize} / ${CREW_MAX}`;
     this.crewCode.textContent = this.crewActions.code();
@@ -213,6 +233,42 @@ export class LogSheet {
     this.empty.textContent = t('sheet.empty');
     this.list.textContent = '';
     for (const entry of entries) this.list.append(logRow(entry, now));
+  }
+
+  /** 모자·옷 색 고르기 — 누르면 그 자리에서 갑판의 내가 갈아입는다 */
+  private renderAvatar(): void {
+    const spec = this.avatarActions.current();
+    this.avatarLead.textContent = t('avatar.lead');
+    this.avatarHatLabel.textContent = t('avatar.hat');
+    this.avatarOutfitLabel.textContent = t('avatar.outfit');
+
+    this.avatarHats.textContent = '';
+    for (const hat of AVATAR_HATS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `theme-chip${hat === spec.hat ? ' is-active' : ''}`;
+      btn.textContent = t(`avatar.hat.${hat}`);
+      btn.addEventListener('click', () => {
+        this.avatarActions.setHat(hat);
+        this.renderAvatar();
+      });
+      this.avatarHats.append(btn);
+    }
+
+    this.avatarOutfits.textContent = '';
+    for (const outfit of AVATAR_OUTFITS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `avatar-dot${outfit === spec.outfit ? ' is-active' : ''}`;
+      // 옷 색 id 가 곧 팔레트 키다 — CSS 변수로 그대로 칠한다
+      btn.style.background = `var(--mh-${outfit})`;
+      btn.setAttribute('aria-label', outfit);
+      btn.addEventListener('click', () => {
+        this.avatarActions.setOutfit(outfit);
+        this.renderAvatar();
+      });
+      this.avatarOutfits.append(btn);
+    }
   }
 
   private async copyInvite(): Promise<void> {

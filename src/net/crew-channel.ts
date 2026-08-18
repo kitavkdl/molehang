@@ -1,3 +1,4 @@
+import { sanitizeAvatar, type AvatarSpec } from '../game/avatar.ts';
 import {
   CREW_MAX,
   giftFromCollect,
@@ -23,6 +24,8 @@ export interface CrewProfile {
   name: string;
   title: string;
   partCount: number;
+  /** 선장 아바타 — 받은 쪽 갑판에 세울 때 쓴다 */
+  avatar: AvatarSpec;
 }
 
 export interface CrewChannel {
@@ -43,13 +46,21 @@ const STALE_MS = 9000;
 const PRUNE_MS = 2000;
 
 type Message =
-  | { type: 'ping' | 'bye'; from: string; name: string; title: string; partCount: number }
+  | {
+      type: 'ping' | 'bye';
+      from: string;
+      name: string;
+      title: string;
+      partCount: number;
+      avatar?: AvatarSpec;
+    }
   | {
       type: 'collect';
       from: string;
       name: string;
       title: string;
       partCount: number;
+      avatar?: AvatarSpec;
       amount: number;
       parts: PartKind[];
     };
@@ -58,7 +69,12 @@ export class BroadcastCrewChannel implements CrewChannel {
   readonly selfId: string;
   private channel: BroadcastChannel | null = null;
   private code: string | null = null;
-  private profile: CrewProfile = { name: '나', title: '', partCount: 0 };
+  private profile: CrewProfile = {
+    name: '나',
+    title: '',
+    partCount: 0,
+    avatar: sanitizeAvatar(null),
+  };
   private readonly seen = new Map<string, CrewMember>();
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private pruneTimer: ReturnType<typeof setInterval> | null = null;
@@ -136,11 +152,17 @@ export class BroadcastCrewChannel implements CrewChannel {
     this.giftListeners.clear();
   }
 
-  private profileFields(): { name: string; title: string; partCount: number } {
+  private profileFields(): {
+    name: string;
+    title: string;
+    partCount: number;
+    avatar: AvatarSpec;
+  } {
     return {
       name: this.profile.name,
       title: this.profile.title,
       partCount: this.profile.partCount,
+      avatar: this.profile.avatar,
     };
   }
 
@@ -177,6 +199,8 @@ export class BroadcastCrewChannel implements CrewChannel {
       name: msg.name,
       title: msg.title,
       partCount: msg.partCount,
+      // 다른 탭이 보낸 값이다 — 옛 버전 탭에는 아예 없을 수도 있다. 반드시 거른다
+      avatar: sanitizeAvatar(msg.avatar),
       lastSeen: Date.now(),
     });
     this.emitPresence();

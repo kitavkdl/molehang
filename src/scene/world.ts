@@ -5,9 +5,11 @@ import {
   type SkyState,
   type TimeOfDaySource,
 } from '../core/time-of-day.ts';
+import type { AvatarSpec } from '../game/avatar.ts';
 import type { Inventory } from '../game/parts.ts';
 import { Motes } from '../fx/motes.ts';
 import { Arrange } from './arrange.ts';
+import { Avatars } from './avatars.ts';
 import { Birds } from './birds.ts';
 import { Boat } from './boat.ts';
 import { Clouds } from './clouds.ts';
@@ -47,6 +49,7 @@ export class World {
   private readonly arrange: Arrange;
   private readonly telescope: Telescope;
   private readonly voyage: Voyage;
+  private readonly avatars: Avatars;
   private readonly state: SkyState = createSkyState();
   private readonly target = new Vector3();
 
@@ -90,6 +93,10 @@ export class World {
     this.motes = new Motes();
 
     this.voyage = new Voyage(canvas);
+
+    // 아바타는 배 로컬 그룹에 태운다 — 파도 흔들림과 요(yaw)를 배와 같이 탄다
+    this.avatars = new Avatars();
+    this.boat.localSpace.add(this.avatars.group);
 
     this.scene.add(
       this.sky.mesh,
@@ -154,6 +161,11 @@ export class World {
 
   setFill(fill: number): void {
     this.motes.setFill(fill);
+  }
+
+  /** 갑판 위에 설 선장들 — 첫 번째가 나, 나머지는 접속 중인 선원들 */
+  setAvatars(specs: readonly AvatarSpec[]): void {
+    this.avatars.setCrew(specs);
   }
 
   /** 인벤토리를 배에 반영 */
@@ -294,6 +306,7 @@ export class World {
     this.clouds.update(this.state, dt);
     this.birds.update(this.state, this.elapsed);
     this.boat.update(this.elapsed, dt, seaX, seaZ, this.voyage.vx, this.voyage.vz);
+    this.avatars.update(this.elapsed);
     this.shadow.update(this.elapsed, seaX, seaZ);
     this.foam.update(this.state, this.elapsed, seaX, seaZ);
     this.motes.update(this.elapsed, dt, this.boat.collectTarget);
@@ -369,6 +382,7 @@ export class World {
     this.arrange.dispose();
     this.telescope.dispose();
     this.voyage.dispose();
+    this.avatars.dispose();
     globalThis.removeEventListener('resize', this.resize);
     this.sky.dispose();
     this.ocean.dispose();

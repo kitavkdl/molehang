@@ -17,11 +17,24 @@ import { amount } from './format.ts';
  * 결과를 즉시 통보하지 않고 **돌아가는 걸 보여 준 뒤** 멈춘다 — 그 2초가 이 게임에서
  * 유일하게 두근거리는 구간이다. 멈춘 다음엔 되돌릴 수 없다: 나온 건 반드시 장착된다.
  * 자리가 모자라면 그 자리에서 "무엇을 뽑아낼지" 고르게 한다.
+ *
+ * ## 왜 CSS transition 이 아니라 rAF 로 직접 돌리는가 (세 번째 사고 후 결론)
+ *
+ * transition 은 "시작 상태를 브라우저가 한 번 그렸는가"에 달려 있다. 패널이 hidden 에서
+ * 풀리는 프레임과 겹치면 시작 상태를 본 적이 없어 **회전이 통째로 생략**되고, 원판이
+ * 결과 각도로 순간이동한다. 강제 리플로우 + rAF 두 번으로 막아 봤지만 기기 사정에 따라
+ * 여전히 간헐적으로 터졌다. 매 프레임 각도를 계산해 손으로 넣으면 이 계급의 버그가
+ * 아예 존재하지 않는다. 되돌리지 말 것.
+ *
+ * ## 예열 회전
+ *
+ * 뽑기 요청(게이트웨이)은 로그인 상태에서 네트워크를 탄다 — 1~2초씩 걸린다.
+ * 그동안 원판이 죽은 듯 서 있으면 "고장났다"로 읽히므로, 패널이 열리는 순간부터
+ * 천천히 돌기 시작하고 결과가 오면 그 각도에서 이어서 본 스핀에 들어간다.
  */
 const SPIN_MS = 2100;
-/** 패널이 뜨는 연출이 끝나고 스핀이 시작되기까지의 숨 고르기 */
-const SETTLE_MS = 260;
-const SPIN_EASE = 'cubic-bezier(0.12, 0.72, 0.12, 1)';
+/** 예열 회전 속도 (도/초) — 기대감은 주되 어지럽지는 않게 */
+const IDLE_SPIN_SPEED = 140;
 
 export interface GachaHandlers {
   /** 뽑기 실행 — 부품과 자리 부족 여부를 돌려준다 */
@@ -52,11 +65,18 @@ export class GachaPanel {
   private readonly closeBtn = must('gacha-close') as HTMLButtonElement;
   private readonly confirmBtn = must('gacha-confirm') as HTMLButtonElement;
 
-  private spinning = false;
+  /**
+   * 열자마자 true, 결과가 화면에 앉거나 판이 닫히면 false.
+   * 뽑기 요청이 네트워크를 타는 동안(스핀 시작 전)에도 닫기·재진입을 막는다 —
+   * 고철은 이미 빠졌는데 스크림 탭으로 판이 사라지는 사고가 실제로 났었다.
+   */
+  private busy = false;
   private pending: { drawn: PartKind; needsRoom: boolean } | null = null;
   private chosenRemoval: PartKind | null = null;
   private angle = 0;
   private labels: HTMLElement[] = [];
+  /** 진행 중인 회전 (예열 또는 본 스핀)의 rAF 핸들 */
+  private spinRaf = 0;
 
   constructor(private readonly handlers: GachaHandlers) {
     this.closeBtn.addEventListener('click', () => this.tryClose());
@@ -69,7 +89,7 @@ export class GachaPanel {
   }
 
   private tryClose(): void {
-    if (this.pending !== null || this.spinning) return;
+    if (this.pending !== null || this.busy) return;
     this.hide();
   }
 
@@ -81,7 +101,8 @@ export class GachaPanel {
     labels: string[],
     draw: () => Promise<{ label: string; index: number } | null>,
   ): Promise<void> {
-    if (this.spinning || labels.length === 0) return;
+    if (this.busy || !this.root.hidden || labels.length === 0) return;
+    this.busy = true;
 
     this.pending = null;
     this.result.hidden = true;
@@ -92,15 +113,14 @@ export class GachaPanel {
     this.note.textContent = t('theme.note');
 
     this.renderWheel(labels);
-    this.root.hidden = false;
-    this.scrim.hidden = false;
-    requestAnimationFrame(() => {
-      this.root.classList.add('is-open');
-      this.scrim.classList.add('is-open');
-    });
+    this.show();
+    // 뽑기 요청이 도는 동안에도 원판은 바로 돌기 시작한다 — 죽은 화면 금지
+    this.startIdleSpin();
 
     const outcome = await draw();
     if (outcome === null) {
+      this.stopSpin();
+      this.busy = false;
       this.closeBtn.disabled = false;
       this.hide();
       return;
@@ -112,15 +132,18 @@ export class GachaPanel {
     this.resultBlurb.textContent = t('theme.applied');
     this.resultStats.textContent = '';
     this.closeBtn.disabled = false;
+    this.busy = false;
   }
 
   /** 등급 뽑기를 시작한다 */
   async open(tier: PartTier, snap: GameSnapshot): Promise<void> {
-    if (this.spinning) return;
+    // busy 는 진입 즉시 선다 — 연타로 뽑기가 두 번 결제되는 창을 없앤다
+    if (this.busy || !this.root.hidden) return;
     if (snap.scrap < snap.costs[tier]) {
       this.handlers.onCantAfford();
       return;
     }
+    this.busy = true;
 
     this.pending = null;
     this.chosenRemoval = null;
@@ -132,15 +155,13 @@ export class GachaPanel {
     this.note.textContent = t('gacha.mustEquip');
 
     this.buildWheel(tier);
-    this.root.hidden = false;
-    this.scrim.hidden = false;
-    requestAnimationFrame(() => {
-      this.root.classList.add('is-open');
-      this.scrim.classList.add('is-open');
-    });
+    this.show();
+    this.startIdleSpin();
 
     const outcome = await this.handlers.draw(tier);
     if (outcome === null) {
+      this.stopSpin();
+      this.busy = false;
       this.handlers.onCantAfford();
       this.closeBtn.disabled = false;
       this.hide();
@@ -149,7 +170,17 @@ export class GachaPanel {
 
     await this.spinTo(tier, outcome.drawn);
     this.pending = { drawn: outcome.drawn, needsRoom: outcome.needsRoom };
+    this.busy = false;
     this.showResult(outcome.drawn, outcome.needsRoom, outcome.removable);
+  }
+
+  private show(): void {
+    this.root.hidden = false;
+    this.scrim.hidden = false;
+    requestAnimationFrame(() => {
+      this.root.classList.add('is-open');
+      this.scrim.classList.add('is-open');
+    });
   }
 
   private buildWheel(tier: PartTier): void {
@@ -162,10 +193,7 @@ export class GachaPanel {
     const pool = labels;
     this.disc.textContent = '';
     this.labels = [];
-    // 지난 스핀의 회전이 남아 있으면 새 판이 기울어진 채 열린다 — 소리 없이 0으로 되감는다
-    this.angle = 0;
-    this.disc.style.transition = 'none';
-    this.disc.style.transform = 'rotate(0deg)';
+    this.stopSpin();
 
     const step = 360 / pool.length;
 
@@ -195,6 +223,9 @@ export class GachaPanel {
       this.disc.append(label);
       this.labels.push(label);
     });
+
+    // 지난 스핀의 회전이 남아 있으면 새 판이 기울어진 채 열린다 — 0으로 되감는다
+    this.setAngle(0);
   }
 
   /** 뽑힌 부품이 포인터 아래에 멈추도록 각도를 계산해 돌린다 */
@@ -204,16 +235,35 @@ export class GachaPanel {
   }
 
   /** disc 는 시계 방향으로, 라벨은 그만큼 반대로 돌려 글자를 항상 똑바로 세운다 */
-  private applyAngle(transition: string): void {
-    this.disc.style.transition = transition;
-    this.disc.style.transform = `rotate(${this.angle}deg)`;
+  private setAngle(angle: number): void {
+    this.angle = angle;
+    this.disc.style.transform = `rotate(${angle}deg)`;
     for (const label of this.labels) {
-      label.style.transition = transition === 'none' ? 'none' : transition;
-      label.style.transform = `translate(-50%, -50%) rotate(${-this.angle}deg)`;
+      label.style.transform = `translate(-50%, -50%) rotate(${-angle}deg)`;
     }
   }
 
+  private stopSpin(): void {
+    cancelAnimationFrame(this.spinRaf);
+    this.spinRaf = 0;
+  }
+
+  /** 결과를 기다리는 동안의 예열 회전 — 열리는 즉시 돌기 시작한다 */
+  private startIdleSpin(): void {
+    this.stopSpin();
+    let last = performance.now();
+    const frame = (now: number): void => {
+      this.setAngle(this.angle + ((now - last) / 1000) * IDLE_SPIN_SPEED);
+      last = now;
+      this.spinRaf = requestAnimationFrame(frame);
+    };
+    this.spinRaf = requestAnimationFrame(frame);
+  }
+
+  /** 지금 각도에서 이어서, 몇 바퀴 돈 뒤 목표 조각 한가운데에 멈춘다 */
   private async spinToIndex(count: number, index: number): Promise<void> {
+    this.stopSpin();
+
     const step = 360 / count;
     // 슬라이스 중앙이 12시(포인터)에 오도록
     const target = 360 - (index * step + step / 2);
@@ -222,23 +272,28 @@ export class GachaPanel {
     const spinMs = reduced ? 420 : SPIN_MS;
     const turns = reduced ? 1 : 5;
 
-    this.spinning = true;
+    const from = this.angle;
+    const to = from + 360 * turns + (((target - (from % 360)) + 360) % 360);
 
-    // 패널이 방금 hidden 에서 풀려 아직 페인트 전일 수 있다. 그 상태에서 최종 각도를
-    // 넣으면 브라우저가 시작 상태를 본 적이 없어 transition 이 통째로 생략된다(= 원판이
-    // 순간이동한다). 시작 각도를 먼저 못박고, 강제 리플로우 + 한 프레임을 기다린다.
-    this.applyAngle('none');
-    void this.disc.offsetWidth;
-    await nextFrame();
-    await nextFrame();
-    // 패널 등장 연출이 끝난 뒤 돌기 시작해야 스핀의 처음부터 보인다
-    await delay(SETTLE_MS);
+    await new Promise<void>((resolve) => {
+      const t0 = performance.now();
+      const frame = (now: number): void => {
+        const k = Math.min(1, (now - t0) / spinMs);
+        // 급하게 출발해 부드럽게 멈춘다 — 옛 cubic-bezier(0.12, 0.72, 0.12, 1) 의 감각
+        const eased = 1 - (1 - k) ** 3.6;
+        this.setAngle(from + (to - from) * eased);
+        if (k < 1) {
+          this.spinRaf = requestAnimationFrame(frame);
+          return;
+        }
+        this.spinRaf = 0;
+        resolve();
+      };
+      this.spinRaf = requestAnimationFrame(frame);
+    });
 
-    this.angle += 360 * turns + ((target - (this.angle % 360)) + 360) % 360;
-    this.applyAngle(`transform ${spinMs}ms ${SPIN_EASE}`);
-
-    await delay(spinMs + 80);
-    this.spinning = false;
+    // 멈춘 원판을 한 박자 보여 준 뒤에 결과를 띄운다
+    await delay(140);
   }
 
   /**
@@ -246,7 +301,7 @@ export class GachaPanel {
    * 돌림판은 스핀 없이 결과 위치에 멈춰 세워 둔다.
    */
   resume(tier: PartTier, kind: PartKind, needsRoom: boolean, removable: PartKind[]): void {
-    if (this.spinning || !this.root.hidden) return;
+    if (this.busy || !this.root.hidden) return;
 
     this.pending = null;
     this.chosenRemoval = null;
@@ -260,15 +315,9 @@ export class GachaPanel {
     this.buildWheel(tier);
     const pool = gachaKindsOfTier(tier);
     const step = 360 / pool.length;
-    this.angle = 360 - (Math.max(0, pool.indexOf(kind)) * step + step / 2);
-    this.applyAngle('none');
+    this.setAngle(360 - (Math.max(0, pool.indexOf(kind)) * step + step / 2));
 
-    this.root.hidden = false;
-    this.scrim.hidden = false;
-    requestAnimationFrame(() => {
-      this.root.classList.add('is-open');
-      this.scrim.classList.add('is-open');
-    });
+    this.show();
 
     this.pending = { drawn: kind, needsRoom };
     this.showResult(kind, needsRoom, removable);
@@ -386,10 +435,6 @@ function wedgeClip(stepDeg: number): string {
     points.push(`${(50 + Math.sin(a) * r).toFixed(2)}% ${(50 - Math.cos(a) * r).toFixed(2)}%`);
   }
   return `polygon(${points.join(', ')})`;
-}
-
-function nextFrame(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 function delay(ms: number): Promise<void> {

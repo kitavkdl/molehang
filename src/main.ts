@@ -7,6 +7,7 @@ import {
   PHASE_ANCHOR_HOUR,
   type TimeOfDaySource,
 } from './core/time-of-day.ts';
+import { AvatarStore } from './game/avatar.ts';
 import { GAME_CONFIG, STORAGE_KEY } from './game/config.ts';
 import { CrewSession } from './game/crew-session.ts';
 import { Game, type GameSnapshot } from './game/game.ts';
@@ -79,6 +80,8 @@ function boot(): void {
   const channel = createCrewChannel();
   const local = new LocalGateway(GAME_CONFIG, undefined, undefined, storageKey);
   const crew = new CrewSession(channel, seat);
+  // 아바타는 사람의 것 — 선단 이름과 같은 자리에 산다 (배 저장과 무관)
+  const avatarStore = new AvatarStore(seat);
 
   // 로그인 상태는 부팅 중에 정해진다. 그 전까지는 게스트(로컬)로 시작해
   // **네트워크가 죽어도 게임이 뜨게** 한다.
@@ -93,6 +96,7 @@ function boot(): void {
     name: crew.displayName,
     title: snap.title.name[locale()],
     partCount: snap.partCount,
+    avatar: avatarStore.current,
   });
 
   const sheet = new LogSheet(
@@ -117,6 +121,17 @@ function boot(): void {
           paint(game.snapshot());
           await sheet.refresh();
         })();
+      },
+    },
+    {
+      current: () => avatarStore.current,
+      setHat: (hat) => {
+        avatarStore.set({ hat });
+        paint(game.snapshot());
+      },
+      setOutfit: (outfit) => {
+        avatarStore.set({ outfit });
+        paint(game.snapshot());
       },
     },
   );
@@ -278,6 +293,8 @@ function boot(): void {
     world.setParts(snap.parts, false, snap.placements);
     world.setLight(snap.light);
     world.setVoyageSpeed(snap.voyageSpeed);
+    // 갑판 위 선장들 — 첫 번째가 나, 뒤는 같이 접속해 있는 선원들
+    world.setAvatars([avatarStore.current, ...snap.crew.map((m) => m.avatar)]);
     crew.update(profileFrom(snap));
   }
 

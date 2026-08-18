@@ -1,3 +1,5 @@
+import type { AvatarSpec } from './avatar.ts';
+
 /**
  * 선단(crew) — 친구와 같이 하면 빨라진다.
  *
@@ -27,6 +29,8 @@ export interface CrewMember {
   /** 그 사람 배의 현재 칭호 */
   title: string;
   partCount: number;
+  /** 그 사람의 선장 아바타 — 같이 접속해 있는 동안 내 갑판에도 선다 */
+  avatar: AvatarSpec;
   /** 마지막 신호 시각 (epoch ms) */
   lastSeen: number;
 }

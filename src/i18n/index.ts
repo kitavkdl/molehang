@@ -50,6 +50,15 @@ const KO: Dict = {
 
   // 기록 시트
   'sheet.title': '항해 기록',
+  'sheet.sectionAvatar': '선장 아바타',
+  'avatar.lead':
+    '갑판에 서 있는 작은 선장이 나예요. 선단으로 같이 접속하면 친구들도 내 갑판에 나란히 섭니다.',
+  'avatar.hat': '모자',
+  'avatar.outfit': '옷 색',
+  'avatar.hat.none': '맨머리',
+  'avatar.hat.cap': '챙 모자',
+  'avatar.hat.tricorn': '삼각모',
+  'avatar.hat.bucket': '밀짚모자',
   'sheet.statLifetime': '누적 고철',
   'sheet.statCollects': '수거',
   'sheet.statParts': '파츠',
@@ -214,6 +223,15 @@ const EN: Dict = {
   'gacha.statEffect': 'Effect',
 
   'sheet.title': 'Logbook',
+  'sheet.sectionAvatar': 'Captain avatar',
+  'avatar.lead':
+    "That little captain on deck is you. Crewmates sailing with you stand on your deck too.",
+  'avatar.hat': 'Hat',
+  'avatar.outfit': 'Outfit',
+  'avatar.hat.none': 'Bare head',
+  'avatar.hat.cap': 'Cap',
+  'avatar.hat.tricorn': 'Tricorn',
+  'avatar.hat.bucket': 'Straw hat',
   'sheet.statLifetime': 'Total scrap',
   'sheet.statCollects': 'Collects',
   'sheet.statParts': 'Parts',
