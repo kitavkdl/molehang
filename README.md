@@ -52,11 +52,33 @@ npm run dev
 - **나온 건 전부 장착된다.** 소켓이 차면 위로 쌓인다 — 엔진 12개면 4층 엔진탑
 - 구성에 따라 숨은 칭호 11종 (이끼 유령선, 폭주 기관선, 돛의 탑, 고철 요새 …)
 
+**선단 — 혼자도 되지만 같이 하면 빨라진다**
+- 초대 코드(6자리)로 최대 4명까지 묶인다. 링크 하나로 초대
+- **같이 접속해 있는 동안** 축적 속도 1인당 +15% (최대 +45%)
+- 친구가 수거하면 그 양의 12%가 나에게 떨어지고, **부품 하나가 내 배에도 붙는다**
+- 혼자일 때는 선단 UI가 아예 숨는다 — 혼자 하는 사람에게 결핍을 만들지 않는다
+
+> 지금 통신은 `BroadcastChannel` 이라 **같은 브라우저의 다른 탭·창**끼리만 이어집니다.
+> 다른 기기의 친구와 연결하려면 서버(Supabase Realtime) 연결이 필요하고,
+> 인터페이스(`CrewChannel`)는 그대로 갈아끼울 수 있게 분리해 두었습니다.
+> 지금 해 보려면: 초대 링크를 복사해 새 탭에 `&seat=b` 를 붙여 열면 두 번째 선원이 됩니다.
+
 **그 외**
-- 첫 방문 튜토리얼 5스텝 (시트에서 다시 보기 가능)
+- 첫 방문 튜토리얼 6스텝 (시트에서 다시 보기 가능)
 - 모바일 세로 / PC 가로 두 벌의 레이아웃 (PC에서는 기록이 오른쪽 사이드 패널)
 
-들어 있지 **않은** 것: 서버, 로그인, 소셜, 수익화, 파츠 선택/판매 UI.
+들어 있지 **않은** 것: 로그인, 수익화, 파츠 선택/판매 UI, 랭킹.
+
+## 배포
+
+`main` 에 푸시하면 GitHub Actions 가 빌드해서 GitHub Pages 로 올린다 (`.github/workflows/deploy.yml`).
+저장소에서 **Settings → Pages → Source 를 "GitHub Actions"** 로 한 번만 바꿔 주면 그다음부터 자동이다.
+
+파일 하나로 만들어 그냥 열거나 아무 데나 올리고 싶다면:
+
+```bash
+npm run build && npm run build:standalone   # dist/molehang-standalone.html
+```
 
 ## 구조
 
@@ -68,6 +90,9 @@ src/
   core/time-of-day.ts  시각 → 씬 색/조명 보간
   game/accrual.ts      축적 계산 (순수 함수)   ← 나중에 서버에서 재사용
   game/parts.ts        파츠 확률 · 인벤토리 · 칭호 판정
+  game/crew.ts         선단 보너스 · 선물 · 초대 코드 (순수 계산)
+  game/crew-session.ts 내 코드/이름 보관 + 채널 접속
+  net/crew-channel.ts  CrewChannel 인터페이스 ← 나중에 Supabase Realtime 으로 교체
   game/gateway.ts      MolehangGateway 인터페이스 ← 나중에 Supabase 구현체로 교체
   game/local-gateway.ts  localStorage 구현
   game/game.ts         게이트웨이 ↔ 화면 사이 얇은 층
@@ -104,6 +129,8 @@ UI·씬 코드는 `localStorage` 를 직접 만지지 않으므로 호출부는 
 | `phase` | `?phase=dusk` | `dawn` / `day` / `dusk` / `night` |
 | `res` | `?res=full` | 보유 자원 강제 |
 | `parts` | `?parts=engine*12,moss*8` | 파츠 강제 장착 |
+| `crew` | `?crew=ABCDEF` | 초대 코드로 선단 합류 |
+| `seat` | `?seat=b` | 세이브 분리 — 같은 기기에서 친구 역할 하나 더 띄우기 |
 | `notutorial` | `?notutorial=1` | 튜토리얼 건너뛰기 |
 | `probe` | `?probe=1` | `window.molehang.sampleLuminance()` 활성화 |
 

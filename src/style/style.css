@@ -11,6 +11,14 @@
   box-sizing: border-box;
 }
 
+/*
+ * `display` 를 지정한 클래스는 UA 스타일시트의 `[hidden] { display: none }` 을 이겨 버린다.
+ * 선단 칩이 hidden 인데도 계속 보였던 원인. 전역으로 못박아 둔다.
+ */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -159,6 +167,154 @@ body {
   height: 7px;
   border-radius: 50%;
   background: var(--mh-role-accentDeep);
+}
+
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* 선단 칩 — 혼자일 때는 아예 숨긴다 */
+.chip--crew {
+  background: var(--mh-role-secret);
+  color: var(--mh-role-surface);
+  gap: 6px;
+}
+
+.chip__crew-count {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chip__crew-bonus {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mh-role-surface) 34%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip--crew.is-new {
+  animation: badge-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 선단 패널 */
+
+.crew-card {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--mh-role-gaugeTrack) 40%, transparent);
+}
+
+.crew-card__lead {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--mh-role-ink) 74%, var(--mh-role-surface));
+}
+
+.crew-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.crew-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.crew-row__name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--mh-role-muted);
+  flex: none;
+  min-width: 44px;
+}
+
+.crew-row.is-self .crew-row__name {
+  color: var(--mh-role-secret);
+}
+
+.crew-row__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mh-role-ink);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crew-row__parts {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mh-role-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.crew-card__code {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mh-role-surface) 80%, transparent);
+}
+
+.crew-card__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mh-role-muted);
+}
+
+.crew-card__value {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--mh-role-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.crew-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.crew-card__actions .ghost-btn {
+  margin: 0;
+  flex: 1;
+  background: color-mix(in srgb, var(--mh-role-surface) 85%, transparent);
+  color: var(--mh-role-ink);
+}
+
+.crew-card__note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--mh-role-muted);
+}
+
+.toast--gift {
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 20px;
+  background: var(--mh-role-secret);
+}
+
+.toast__gift-body {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 자원 */

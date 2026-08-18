@@ -1,4 +1,5 @@
 import type { Clock } from '../core/clock.ts';
+import { CREW_MAX, bonusLabel } from '../game/crew.ts';
 import type { GameSnapshot } from '../game/game.ts';
 import type { CollectLogEntry } from '../game/gateway.ts';
 import { PART_INFO, PART_KINDS, SHIP_TITLES } from '../game/parts.ts';
@@ -22,6 +23,12 @@ export class LogSheet {
   private readonly closeBtn = must('close-sheet');
   private readonly grip = must('sheet-grip');
   private readonly replayBtn = must('replay-tutorial');
+  private readonly crewSize = must('crew-size');
+  private readonly crewLead = must('crew-lead');
+  private readonly crewList = must('crew-list') as HTMLUListElement;
+  private readonly crewCode = must('crew-code');
+  private readonly crewCopy = must('crew-copy') as HTMLButtonElement;
+  private readonly crewJoin = must('crew-join');
 
   private open = false;
 
@@ -30,6 +37,11 @@ export class LogSheet {
     private readonly load: () => Promise<CollectLogEntry[]>,
     private readonly snapshot: () => GameSnapshot,
     onReplayTutorial: () => void,
+    private readonly crewActions: {
+      code: () => string;
+      inviteLink: () => string;
+      join: (code: string) => void;
+    },
   ) {
     this.closeBtn.addEventListener('click', () => this.hide());
     this.scrim.addEventListener('click', () => this.hide());
@@ -37,6 +49,12 @@ export class LogSheet {
     this.replayBtn.addEventListener('click', () => {
       this.hide();
       onReplayTutorial();
+    });
+
+    this.crewCopy.addEventListener('click', () => void this.copyInvite());
+    this.crewJoin.addEventListener('click', () => {
+      const input = globalThis.prompt('친구에게 받은 6자리 초대 코드를 입력하세요');
+      if (input !== null && input.trim() !== '') this.crewActions.join(input);
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.open) this.hide();
@@ -64,6 +82,25 @@ export class LogSheet {
       this.root.hidden = true;
       this.scrim.hidden = true;
     }, 260);
+  }
+
+  private async copyInvite(): Promise<void> {
+    const link = this.crewActions.inviteLink();
+    try {
+      await navigator.clipboard.writeText(link);
+      this.flashCopy('복사했어요!');
+    } catch {
+      // 클립보드 권한이 없으면 링크를 직접 보여 준다
+      globalThis.prompt('이 링크를 친구에게 보내세요', link);
+    }
+  }
+
+  private flashCopy(text: string): void {
+    const original = '초대 링크 복사';
+    this.crewCopy.textContent = text;
+    globalThis.setTimeout(() => {
+      this.crewCopy.textContent = original;
+    }, 1600);
   }
 
   async refresh(): Promise<void> {
@@ -95,6 +132,20 @@ export class LogSheet {
       for (const kind of owned) {
         this.parts.append(partRow(PART_INFO[kind].label, snap.parts[kind], PART_INFO[kind].blurb));
       }
+    }
+
+    // --- 선단 ---
+    this.crewSize.textContent = `${snap.crewSize} / ${CREW_MAX}`;
+    this.crewCode.textContent = this.crewActions.code();
+    this.crewLead.textContent =
+      snap.crewSize > 1
+        ? `같이 있는 동안 축적 속도 ${bonusLabel(snap.crewSize)}. 선원이 수거하면 그 부품 하나가 내 배에도 붙어요.`
+        : '혼자서도 문제없지만, 친구가 합류하면 더 빨리 쌓이고 부품도 나눠 받아요.';
+
+    this.crewList.textContent = '';
+    this.crewList.append(crewRow('나', snap.title.name, snap.partCount, true));
+    for (const m of snap.crew) {
+      this.crewList.append(crewRow(m.name, m.title, m.partCount, false));
     }
 
     // --- 칭호 ---
@@ -129,6 +180,26 @@ export class LogSheet {
     this.list.textContent = '';
     for (const entry of entries) this.list.append(logRow(entry, now));
   }
+}
+
+function crewRow(name: string, title: string, partCount: number, isSelf: boolean): HTMLLIElement {
+  const li = document.createElement('li');
+  li.className = isSelf ? 'crew-row is-self' : 'crew-row';
+
+  const who = document.createElement('span');
+  who.className = 'crew-row__name';
+  who.textContent = name;
+
+  const what = document.createElement('span');
+  what.className = 'crew-row__title';
+  what.textContent = title === '' ? '항해 중' : title;
+
+  const n = document.createElement('span');
+  n.className = 'crew-row__parts';
+  n.textContent = `파츠 ${partCount}`;
+
+  li.append(who, what, n);
+  return li;
 }
 
 function stat(label: string, value: string): HTMLElement {

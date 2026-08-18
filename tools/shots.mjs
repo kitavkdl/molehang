@@ -161,6 +161,29 @@ async function main() {
       await context.close();
     }
 
+    // --- 선단 (같은 컨텍스트의 두 탭 = 두 선원) ---
+    {
+      const context = await browser.newContext(MOBILE_CTX);
+      const a = await context.newPage();
+      const b = await context.newPage();
+      const q = 'phase=dusk&notutorial=1&probe=1&crew=CREWAA';
+      await a.goto(`${BASE}/?${q}&seat=a&res=full&parts=engine*3,lantern*2`, { waitUntil: 'load' });
+      await a.waitForFunction(() => window.__MOLEHANG_READY__ === true, null, { timeout: 25_000 });
+      await b.goto(`${BASE}/?${q}&seat=b&res=300&parts=moss*5,chimney*2`, { waitUntil: 'load' });
+      await b.waitForFunction(() => window.__MOLEHANG_READY__ === true, null, { timeout: 25_000 });
+      await a.waitForTimeout(2200);
+
+      // A 가 수거하면 B 에게 배당 토스트가 뜬다
+      await a.evaluate(() => window.molehang?.collect());
+      await b.waitForTimeout(700);
+      await b.screenshot({ path: path.join(OUT, 'crew-gift.png') });
+
+      await b.click('#open-sheet');
+      await b.waitForTimeout(700);
+      await b.screenshot({ path: path.join(OUT, 'crew-sheet.png') });
+      await context.close();
+    }
+
     // --- PC ---
     for (const shot of [PHASE_SHOTS[0], PHASE_SHOTS[1]]) {
       const { page, errors, context } = await openScene(

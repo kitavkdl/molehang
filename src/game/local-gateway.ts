@@ -27,17 +27,19 @@ export class LocalGateway implements MolehangGateway {
     private readonly config: GameConfig = GAME_CONFIG,
     private readonly storage: Storage | null = safeStorage(),
     private readonly rand: () => number = Math.random,
+    private readonly storageKey: string = STORAGE_KEY,
   ) {
     this.state = this.read();
   }
 
   async load(): Promise<PersistedState> {
-    return this.sync(Date.now());
+    // 오프라인 구간에는 선단 보너스를 주지 않는다 — 같이 있을 때만 붙는 값이다
+    return this.sync(Date.now(), 1);
   }
 
-  async sync(now: number): Promise<PersistedState> {
+  async sync(now: number, multiplier = 1): Promise<PersistedState> {
     const result = accrue(
-      { lastAccruedAt: this.state.lastAccruedAt, stored: this.state.stored, now },
+      { lastAccruedAt: this.state.lastAccruedAt, stored: this.state.stored, now, multiplier },
       this.config,
     );
     this.state.stored = result.stored;
@@ -46,8 +48,26 @@ export class LocalGateway implements MolehangGateway {
     return this.snapshot();
   }
 
-  async collect(now: number): Promise<CollectOutcome> {
-    await this.sync(now);
+  /** 친구 수거 배당 — 상한을 넘지 않게 얹는다 */
+  async receiveGift(
+    now: number,
+    resource: number,
+    part: PartKind | null,
+  ): Promise<PersistedState> {
+    await this.sync(now, 1);
+    this.state.stored = Math.min(this.config.capacity, this.state.stored + Math.max(0, resource));
+    if (part !== null) {
+      this.state.parts[part] += 1;
+      this.state.titles = [
+        ...new Set([...this.state.titles, ...unlockedTitleIds(this.state.parts)]),
+      ];
+    }
+    this.write();
+    return this.snapshot();
+  }
+
+  async collect(now: number, multiplier = 1): Promise<CollectOutcome> {
+    await this.sync(now, multiplier);
     const { taken, left } = collectFrom(this.state.stored, this.config);
 
     if (taken <= 0) {
@@ -127,7 +147,7 @@ export class LocalGateway implements MolehangGateway {
 
   private read(): PersistedState {
     const now = Date.now();
-    const raw = this.storage?.getItem(STORAGE_KEY);
+    const raw = this.storage?.getItem(this.storageKey);
     if (!raw) return fresh(now);
 
     try {
@@ -153,7 +173,7 @@ export class LocalGateway implements MolehangGateway {
 
   private write(): void {
     try {
-      this.storage?.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      this.storage?.setItem(this.storageKey, JSON.stringify(this.state));
     } catch {
       // 사파리 프라이빗 모드 등 — 저장 실패해도 세션은 계속 굴러가야 한다.
     }

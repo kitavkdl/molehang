@@ -1,6 +1,8 @@
 import type { Clock } from '../core/clock.ts';
+import type { CrewChannel } from '../net/crew-channel.ts';
 import { accrue, fillRatio } from './accrual.ts';
 import { GAME_CONFIG, type GameConfig } from './config.ts';
+import { crewMultiplier, type CrewGift, type CrewMember } from './crew.ts';
 import type { CollectLogEntry, MolehangGateway, PersistedState } from './gateway.ts';
 import {
   SHIP_TITLES,
@@ -30,6 +32,12 @@ export interface GameSnapshot {
   title: ShipTitle;
   /** 한 번이라도 달성한 칭호 id */
   unlockedTitles: string[];
+  /** 같이 접속해 있는 선원 (본인 제외) */
+  crew: CrewMember[];
+  /** 본인 포함 인원 */
+  crewSize: number;
+  /** 선단 축적 배율 (1 = 혼자) */
+  crewMultiplier: number;
 }
 
 export interface CollectEvent {
@@ -51,13 +59,17 @@ export class Game {
   private ready = false;
   private writeTimer: ReturnType<typeof setInterval> | null = null;
 
+  private crew: CrewMember[] = [];
+
   private readonly collectListeners = new Set<(e: CollectEvent) => void>();
   private readonly changeListeners = new Set<(s: GameSnapshot) => void>();
+  private readonly giftListeners = new Set<(g: CrewGift) => void>();
 
   constructor(
     private readonly gateway: MolehangGateway,
     private readonly clock: Clock,
     private readonly config: GameConfig = GAME_CONFIG,
+    private readonly channel: CrewChannel | null = null,
   ) {
     this.persisted = {
       lastAccruedAt: clock.now(),
@@ -73,6 +85,14 @@ export class Game {
   async start(): Promise<GameSnapshot> {
     this.persisted = await this.gateway.load();
     this.ready = true;
+
+    if (this.channel !== null) {
+      this.channel.onPresence((members) => {
+        this.crew = members;
+        this.emitChange(this.snapshot());
+      });
+      this.channel.onGift((gift) => void this.applyGift(gift));
+    }
 
     // 주기적으로만 영속화한다 (탭이 오래 열려 있어도 저장 시각이 크게 안 밀리게).
     this.writeTimer = setInterval(() => {
@@ -98,13 +118,34 @@ export class Game {
   /** 게이트웨이에 현재 시각까지 정산해 저장 */
   async flush(): Promise<void> {
     if (!this.ready) return;
-    this.persisted = await this.gateway.sync(this.clock.now());
+    this.persisted = await this.gateway.sync(this.clock.now(), this.multiplier());
+  }
+
+  /** 지금 붙어 있는 선단 배율 */
+  multiplier(): number {
+    return crewMultiplier(this.crew.length + 1);
+  }
+
+  private async applyGift(gift: CrewGift): Promise<void> {
+    if (!this.ready) return;
+    this.persisted = await this.gateway.receiveGift(
+      this.clock.now(),
+      gift.resource,
+      gift.part,
+    );
+    this.emitChange(this.snapshot());
+    for (const fn of this.giftListeners) fn(gift);
   }
 
   snapshot(): GameSnapshot {
     const now = this.clock.now();
     const result = accrue(
-      { lastAccruedAt: this.persisted.lastAccruedAt, stored: this.persisted.stored, now },
+      {
+        lastAccruedAt: this.persisted.lastAccruedAt,
+        stored: this.persisted.stored,
+        now,
+        multiplier: this.multiplier(),
+      },
       this.config,
     );
 
@@ -120,18 +161,24 @@ export class Game {
       partCount: totalParts(this.persisted.parts),
       title: currentTitle(this.persisted.parts),
       unlockedTitles: this.persisted.titles,
+      crew: this.crew,
+      crewSize: this.crew.length + 1,
+      crewMultiplier: this.multiplier(),
     };
   }
 
   async collect(): Promise<CollectEvent | null> {
     if (!this.ready) return null;
-    const outcome = await this.gateway.collect(this.clock.now());
+    const outcome = await this.gateway.collect(this.clock.now(), this.multiplier());
     this.persisted = outcome.state;
 
     const snap = this.snapshot();
     this.emitChange(snap);
 
     if (outcome.taken <= 0 || outcome.entry === null) return null;
+
+    // 선단에 알린다 — 받는 쪽이 각자 자기 몫을 굴린다
+    this.channel?.announceCollect(outcome.taken, outcome.gainedParts);
 
     const event: CollectEvent = {
       amount: outcome.taken,
@@ -186,6 +233,12 @@ export class Game {
   onChange(fn: (s: GameSnapshot) => void): () => void {
     this.changeListeners.add(fn);
     return () => this.changeListeners.delete(fn);
+  }
+
+  /** 친구가 보낸 선물이 도착했을 때 */
+  onGift(fn: (g: CrewGift) => void): () => void {
+    this.giftListeners.add(fn);
+    return () => this.giftListeners.delete(fn);
   }
 
   private emitChange(s: GameSnapshot): void {

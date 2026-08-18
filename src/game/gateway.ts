@@ -50,12 +50,14 @@ export interface CollectOutcome {
 }
 
 export interface MolehangGateway {
-  /** 부팅 시 1회 — 오프라인 축적분이 이미 반영된 상태를 돌려준다 */
+  /** 부팅 시 1회 — 오프라인 축적분이 이미 반영된 상태를 돌려준다 (보너스 미적용) */
   load(): Promise<PersistedState>;
-  /** 지금까지의 축적을 정산해 저장 */
-  sync(now: number): Promise<PersistedState>;
+  /** 지금까지의 축적을 정산해 저장. multiplier 는 선단 보너스 */
+  sync(now: number, multiplier?: number): Promise<PersistedState>;
   /** 수거 확정 */
-  collect(now: number): Promise<CollectOutcome>;
+  collect(now: number, multiplier?: number): Promise<CollectOutcome>;
+  /** 친구가 보내온 선물 — 자원과(있다면) 부품을 그대로 배에 얹는다 */
+  receiveGift(now: number, resource: number, part: PartKind | null): Promise<PersistedState>;
   /** 수거 기록 (최신순) */
   log(limit?: number): Promise<CollectLogEntry[]>;
   /** 데모용 — 저장 초기화 */

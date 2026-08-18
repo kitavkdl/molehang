@@ -98,13 +98,14 @@ export function placementFor(kind: PartKind, index: number): Placement {
     }
 
     // 기본 돛 **위로** 계속 쌓인다 → 돛 7개면 탑이 된다.
-    // (기본 돛과 같은 높이에서 시작하면 안쪽에 겹쳐 박혀 얼룩처럼 보인다)
+    // 기본 돛 꼭대기(갑판 + 3.3)보다 확실히 위에서 시작해야 실루엣이 겹쳐
+    // 너덜너덜해 보이지 않는다. 각 돛은 자기 돛대 토막을 달고 올라간다.
     case 'sail': {
       return {
         x: 0,
-        y: DECK_Y + 2.85 + index * 1.15,
-        z: 0.45 - index * 0.12,
-        scale: Math.max(0.42, 1 - index * 0.1),
+        y: DECK_Y + 3.45 + index * 1.28,
+        z: 0.45 - index * 0.1,
+        scale: Math.max(0.45, 1 - index * 0.09),
       };
     }
 

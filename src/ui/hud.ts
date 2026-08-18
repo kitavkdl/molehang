@@ -1,3 +1,4 @@
+import { bonusLabel } from '../game/crew.ts';
 import type { GameSnapshot } from '../game/game.ts';
 import { amount, duration } from './format.ts';
 
@@ -13,9 +14,13 @@ export class Hud {
   private readonly titleBadge = must('title-badge');
   private readonly titleName = must('title-name');
   private readonly titleParts = must('title-parts');
+  private readonly crewChip = must('crew-chip');
+  private readonly crewCount = must('crew-count');
+  private readonly crewBonus = must('crew-bonus');
 
   private lastShown = -1;
   private lastTitleId = '';
+  private lastCrewSize = -1;
 
   constructor(handlers: { onCollect: () => void; onOpenLog: () => void }) {
     this.collectBtn.addEventListener('click', () => {
@@ -24,6 +29,7 @@ export class Hud {
     });
     this.openSheet.addEventListener('click', handlers.onOpenLog);
     this.titleBadge.addEventListener('click', handlers.onOpenLog);
+    this.crewChip.addEventListener('click', handlers.onOpenLog);
   }
 
   render(snap: GameSnapshot): void {
@@ -56,6 +62,20 @@ export class Hud {
       this.lastTitleId = snap.title.id;
     }
     this.titleParts.textContent = `파츠 ${amount(snap.partCount)}`;
+
+    // 선단 — 혼자일 때는 아예 숨긴다 (혼자 하는 사람에게 결핍을 만들지 않는다)
+    const solo = snap.crewSize <= 1;
+    this.crewChip.hidden = solo;
+    if (!solo) {
+      this.crewCount.textContent = `선원 ${snap.crewSize}`;
+      this.crewBonus.textContent = bonusLabel(snap.crewSize);
+      if (snap.crewSize !== this.lastCrewSize && this.lastCrewSize !== -1) {
+        this.crewChip.classList.remove('is-new');
+        void this.crewChip.offsetWidth;
+        this.crewChip.classList.add('is-new');
+      }
+    }
+    this.lastCrewSize = snap.crewSize;
   }
 
   /** 수거 순간 버튼 피드백 */

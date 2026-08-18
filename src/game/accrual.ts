@@ -14,6 +14,13 @@ export interface AccrualInput {
   stored: number;
   /** 지금 시각 (epoch ms) */
   now: number;
+  /**
+   * 선단 보너스 배율. 기본 1.
+   *
+   * **같이 접속해 있는 동안에만** 붙는 값이라 오프라인 구간에는 적용하지 않는다.
+   * (부팅 시 정산은 1로, 이후 주기 정산은 현재 배율로 — 오차는 정산 주기만큼으로 묶인다)
+   */
+  multiplier?: number;
 }
 
 export interface AccrualResult {
@@ -36,12 +43,15 @@ export function accrue(input: AccrualInput, config: GameConfig): AccrualResult {
   const stored = clamp(safeNumber(input.stored, 0), 0, capacity);
   const elapsedMs = Math.max(0, safeNumber(input.now, 0) - safeNumber(input.lastAccruedAt, 0));
 
-  const raw = (elapsedMs / MS_PER_MINUTE) * ratePerMinute;
+  const multiplier = Math.max(1, safeNumber(input.multiplier, 1));
+  const effectiveRate = ratePerMinute * multiplier;
+
+  const raw = (elapsedMs / MS_PER_MINUTE) * effectiveRate;
   const next = Math.min(capacity, stored + raw);
   const gained = next - stored;
 
   const remaining = capacity - next;
-  const msUntilFull = remaining <= 0 ? 0 : (remaining / ratePerMinute) * MS_PER_MINUTE;
+  const msUntilFull = remaining <= 0 ? 0 : (remaining / effectiveRate) * MS_PER_MINUTE;
 
   return {
     stored: next,

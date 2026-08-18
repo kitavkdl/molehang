@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:standalone": "node tools/standalone.mjs",
     "preview": "vite preview",
     "shots": "node tools/shots.mjs"
   },

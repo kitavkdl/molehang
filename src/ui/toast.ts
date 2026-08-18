@@ -1,3 +1,4 @@
+import type { CrewGift } from '../game/crew.ts';
 import { PART_INFO, type PartKind } from '../game/parts.ts';
 import type { ShipTitle } from '../game/parts.ts';
 
@@ -30,6 +31,26 @@ export class Toasts {
     el.append(suffix);
 
     this.push(el, 2600);
+  }
+
+  /** 친구 수거로 나에게 떨어진 몫 */
+  gift(gift: CrewGift): void {
+    const el = document.createElement('div');
+    el.className = 'toast toast--gift';
+
+    const who = document.createElement('span');
+    who.className = 'toast__label';
+    who.textContent = `${gift.fromName}의 수거`;
+
+    const body = document.createElement('span');
+    body.className = 'toast__gift-body';
+    body.textContent =
+      gift.part === null
+        ? `+${gift.resource}`
+        : `+${gift.resource} · ${PART_INFO[gift.part].label} 장착`;
+
+    el.append(who, body);
+    this.push(el, 3200);
   }
 
   title(title: ShipTitle): void {

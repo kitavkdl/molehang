@@ -23,10 +23,16 @@
             <span class="title-badge__parts" id="title-parts">파츠 0</span>
           </button>
         </div>
-        <button class="chip" id="open-sheet" type="button" aria-haspopup="dialog">
-          <span class="chip__dot" aria-hidden="true"></span>
-          기록
-        </button>
+        <div class="topbar__right">
+          <button class="chip chip--crew" id="crew-chip" type="button" aria-haspopup="dialog" hidden>
+            <span class="chip__crew-count" id="crew-count">1</span>
+            <span class="chip__crew-bonus" id="crew-bonus"></span>
+          </button>
+          <button class="chip" id="open-sheet" type="button" aria-haspopup="dialog">
+            <span class="chip__dot" aria-hidden="true"></span>
+            기록
+          </button>
+        </div>
       </header>
 
       <!-- 자원 -->
@@ -69,6 +75,24 @@
           <div class="ship-card__hint" id="ship-title-hint">시작은 다 이렇다</div>
         </div>
         <ul class="parts" id="parts"></ul>
+
+        <h3 class="sheet__section">선단 <span class="sheet__count" id="crew-size"></span></h3>
+        <div class="crew-card">
+          <p class="crew-card__lead" id="crew-lead"></p>
+          <ul class="crew-list" id="crew-list"></ul>
+          <div class="crew-card__code">
+            <span class="crew-card__label">초대 코드</span>
+            <strong class="crew-card__value" id="crew-code">------</strong>
+          </div>
+          <div class="crew-card__actions">
+            <button class="ghost-btn" id="crew-copy" type="button">초대 링크 복사</button>
+            <button class="ghost-btn" id="crew-join" type="button">코드로 합류</button>
+          </div>
+          <p class="crew-card__note">
+            지금은 <strong>같은 브라우저의 다른 탭·창</strong>끼리만 이어집니다.
+            다른 기기의 친구와 연결하려면 서버(Supabase) 연결이 필요해요.
+          </p>
+        </div>
 
         <h3 class="sheet__section">칭호 <span class="sheet__count" id="titles-count"></span></h3>
         <ul class="titles" id="titles"></ul>
