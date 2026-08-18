@@ -17,8 +17,9 @@ import {
   sailGeometry,
   type HullSpec,
 } from './hull.ts';
+import type { ArrangeTarget } from './arrange.ts';
 import { sampleWave } from './ocean.ts';
-import { buildPart } from './part-sockets.ts';
+import { buildPart, partKey } from './part-sockets.ts';
 
 export { BOAT_YAW, HULL } from './hull.ts';
 
@@ -39,7 +40,9 @@ export class Boat {
   private readonly geometries: BufferGeometry[] = [];
 
   private mounted: Object3D[] = [];
+  private parts: ArrangeTarget[] = [];
   private previous: Inventory = emptyInventory();
+  private placements: Record<string, [number, number, number]> = {};
   private signature = '';
   /** 방금 붙어서 튀어 오르는 중인 파츠들 */
   private readonly popping: Array<{ object: Object3D; t: number; scale: number }> = [];
@@ -104,13 +107,19 @@ export class Boat {
    *
    * @param animateNew 새로 붙는 파츠를 팝 애니메이션으로 등장시킬지
    */
-  setParts(inventory: Inventory, animateNew = false): void {
-    const signature = PART_KINDS.map((k) => inventory[k]).join(',');
+  setParts(
+    inventory: Inventory,
+    animateNew = false,
+    placements: Record<string, [number, number, number]> = this.placements,
+  ): void {
+    const signature = `${PART_KINDS.map((k) => inventory[k]).join(',')}|${JSON.stringify(placements)}`;
     if (signature === this.signature) return;
 
     for (const obj of this.mounted) this.rig.remove(obj);
     this.mounted = [];
+    this.parts = [];
     this.popping.length = 0;
+    this.placements = placements;
 
     for (const zone of PART_ZONES) {
       let index = 0;
@@ -119,8 +128,16 @@ export class Boat {
         for (let i = 0; i < inventory[kind]; i++) {
           const object = buildPart(kind, index);
           index += 1;
+
+          // 끌어서 옮겨 둔 자리가 있으면 그걸 쓴다
+          const key = partKey(kind, i);
+          const custom = placements[key];
+          if (custom !== undefined) object.position.set(custom[0], custom[1], custom[2]);
+
           this.rig.add(object);
           this.mounted.push(object);
+          this.parts.push({ object, key, zone });
+
           // 이번에 늘어난 개수만 팝으로 등장시킨다
           if (animateNew && i >= this.previous[kind]) {
             this.popping.push({ object, t: 0, scale: object.scale.x });
@@ -132,6 +149,16 @@ export class Boat {
 
     this.previous = { ...inventory };
     this.signature = signature;
+  }
+
+  /** 배치 모드에서 끌 수 있는 부품들 */
+  get arrangeTargets(): ArrangeTarget[] {
+    return this.parts;
+  }
+
+  /** 배 로컬 좌표계의 기준 — 드래그 좌표 변환에 쓴다 */
+  get localSpace(): Group {
+    return this.body;
   }
 
   /** 파도 위에서 흔들린다 — 바다 셰이더와 같은 파형 함수를 공유 */

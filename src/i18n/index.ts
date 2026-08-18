@@ -84,6 +84,13 @@ const KO: Dict = {
   'log.first': '첫 수거',
   'log.gathered': '{t} 모음',
 
+  // 배치
+  'arrange.toggle': '배치',
+  'arrange.hint': '부품을 끌어서 옮기세요 — 각자 정해진 구역 안에서만 움직여요',
+  'arrange.moving': '{name} 옮기는 중',
+  'arrange.done': '완료',
+  'arrange.reset': '자동 정렬',
+
   // 계정
   'auth.guest': '게스트',
   'auth.account': '계정',
@@ -201,6 +208,12 @@ const EN: Dict = {
 
   'log.first': 'First collect',
   'log.gathered': 'gathered over {t}',
+
+  'arrange.toggle': 'Arrange',
+  'arrange.hint': 'Drag parts to move them — each one stays inside its own area',
+  'arrange.moving': 'Moving {name}',
+  'arrange.done': 'Done',
+  'arrange.reset': 'Auto-arrange',
 
   'auth.guest': 'Guest',
   'auth.account': 'Account',

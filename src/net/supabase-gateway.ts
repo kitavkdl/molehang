@@ -21,6 +21,7 @@ import {
   type PartKind,
   type PartTier,
 } from '../game/parts.ts';
+import { sanitizePlacements } from '../game/local-gateway.ts';
 import { supabase } from './auth.ts';
 
 /**
@@ -48,6 +49,7 @@ interface ShipRow {
   last_collected_at: string | null;
   parts: unknown;
   pulls: unknown;
+  placements: unknown;
   titles: string[] | null;
   log: unknown;
 }
@@ -71,6 +73,7 @@ function toState(row: ShipRow): PersistedState {
       medium: num(pulls.medium),
       large: num(pulls.large),
     },
+    placements: sanitizePlacements(row.placements),
     titles: Array.isArray(row.titles) ? row.titles : [],
     log: Array.isArray(row.log) ? (row.log as CollectLogEntry[]) : [],
   };
@@ -92,6 +95,7 @@ export class SupabaseGateway implements MolehangGateway {
       lastCollectedAt: null,
       parts: emptyInventory(),
       pulls: { small: 0, medium: 0, large: 0 },
+      placements: {},
       titles: [],
       log: [],
     };
@@ -187,6 +191,14 @@ export class SupabaseGateway implements MolehangGateway {
       removed: remove,
       newTitleId: fresh.length > 0 ? fresh[fresh.length - 1]! : null,
     };
+  }
+
+  async setPlacements(
+    placements: Record<string, [number, number, number]>,
+  ): Promise<PersistedState> {
+    this.state.placements = { ...placements };
+    await this.push({ placements: this.state.placements });
+    return this.snapshot();
   }
 
   async receiveGift(now: number, scrap: number): Promise<PersistedState> {

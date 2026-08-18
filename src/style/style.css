@@ -1262,6 +1262,70 @@ body {
   box-shadow: none;
 }
 
+/* ---------------------------------------------------------------- 배치 모드 */
+
+.dock__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip--arrange {
+  pointer-events: auto;
+  min-height: 34px;
+  background: color-mix(in srgb, var(--mh-role-surface) 90%, transparent);
+}
+
+.chip--arrange.is-on {
+  background: var(--mh-role-gauge);
+  color: var(--mh-role-surface);
+}
+
+.arrange-bar {
+  pointer-events: auto;
+  margin-top: auto;
+  align-self: center;
+  width: min(100%, 460px);
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--mh-role-surface) 94%, transparent);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--mh-role-ink) 28%, transparent);
+  text-align: center;
+}
+
+.arrange-bar__hint {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--mh-role-ink);
+}
+
+.arrange-bar__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.arrange-bar__actions .ghost-btn {
+  margin: 0;
+  flex: 1;
+}
+
+.arrange-bar__done {
+  flex: 1;
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--mh-role-accent);
+  color: var(--mh-role-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--mh-role-accentDeep);
+}
+
 /* ---------------------------------------------------------------- 계정 */
 
 .chip--account {

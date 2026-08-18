@@ -193,6 +193,37 @@ async function main() {
       await context.close();
     }
 
+    // --- 배치 모드 ---
+    {
+      const { page, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=day&parts=chimney*2,lantern*2,cannon,barrel'),
+      );
+      await page.click('#arrange-toggle');
+      await page.waitForTimeout(500);
+      // 부품 하나를 실제로 집어 옮기는 중간 장면
+      const spots = await page.evaluate(() => window.molehang.partScreenPositions());
+      if (spots.length > 0) {
+        await page.mouse.move(spots[0].x, spots[0].y);
+        await page.mouse.down();
+        await page.mouse.move(spots[0].x - 26, spots[0].y - 34, { steps: 8 });
+        await page.waitForTimeout(250);
+      }
+      await page.screenshot({ path: path.join(OUT, 'arrange.png') });
+      await page.mouse.up();
+      await context.close();
+    }
+
+    // --- 계정 ---
+    {
+      const { page, context } = await openScene(browser, MOBILE_CTX, url('phase=dusk&res=200'));
+      await page.click('#account-chip');
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: path.join(OUT, 'account.png') });
+      await context.close();
+    }
+
     // --- 선단 (같은 컨텍스트의 두 탭 = 두 선원) ---
     {
       const context = await browser.newContext(MOBILE_CTX);

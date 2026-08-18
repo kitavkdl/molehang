@@ -18,6 +18,7 @@ import { Auth } from './net/auth.ts';
 import { createCrewChannel } from './net/crew-channel.ts';
 import { SupabaseGateway, listShips } from './net/supabase-gateway.ts';
 import { AccountPanel, selectShip, selectedShipId } from './ui/account.ts';
+import { ArrangeUi } from './ui/arrange-ui.ts';
 import { World } from './scene/world.ts';
 import { PHASES, applyThemeVars, type Phase } from './style/palette.ts';
 import { GachaPanel } from './ui/gacha.ts';
@@ -34,6 +35,8 @@ declare global {
       setScrap(amount: number): Promise<void>;
       setPending(amount: number): Promise<void>;
       addParts(kinds: PartKind[]): Promise<void>;
+      setPlacement(key: string, position: [number, number, number]): Promise<void>;
+      partScreenPositions(): Array<{ key: string; x: number; y: number }>;
       collect(): Promise<void>;
       draw(tier: PartTier): Promise<void>;
       crewMultiplier(): number;
@@ -123,6 +126,8 @@ function boot(): void {
     onToggleLang: () => {
       setLocale(locale() === 'ko' ? 'en' : 'ko');
       hud.invalidate();
+      arrangeUi.refreshLabels();
+      account.renderChip();
       paint(game.snapshot());
       void sheet.refresh();
     },
@@ -133,10 +138,17 @@ function boot(): void {
     probe: params.has('probe') || params.has('hour') || params.has('phase'),
   });
 
+  const arrangeUi = new ArrangeUi({
+    onChange: (active) => world.setArrangeMode(active),
+    onReset: () => void game.resetPlacements(),
+  });
+  world.onArrangePick((key) => arrangeUi.showPicked(key));
+  world.onArrangeDrop((key, position) => void game.savePlacement(key, position));
+
   function paint(snap: GameSnapshot): void {
     hud.render(snap);
     world.setFill(snap.fill);
-    world.setParts(snap.parts);
+    world.setParts(snap.parts, false, snap.placements);
     world.setLight(snap.light);
     crew.update(profileFrom(snap));
   }
@@ -202,6 +214,7 @@ function boot(): void {
     }
 
     applyStatic();
+    arrangeUi.refreshLabels();
     paint(snap);
     world.start();
     crew.start(params, profileFrom(snap));
@@ -235,6 +248,11 @@ function boot(): void {
       await game.debugAddParts(kinds);
       paint(game.snapshot());
     },
+    async setPlacement(key, position) {
+      await game.savePlacement(key, position);
+      paint(game.snapshot());
+    },
+    partScreenPositions: () => world.partScreenPositions(),
     collect: onCollect,
     async draw(tier) {
       await gacha.open(tier, game.snapshot());

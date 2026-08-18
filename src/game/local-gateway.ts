@@ -131,6 +131,14 @@ export class LocalGateway implements MolehangGateway {
     };
   }
 
+  async setPlacements(
+    placements: Record<string, [number, number, number]>,
+  ): Promise<PersistedState> {
+    this.state.placements = { ...placements };
+    this.write();
+    return this.snapshot();
+  }
+
   async receiveGift(now: number, scrap: number): Promise<PersistedState> {
     await this.sync(now, 1);
     this.state.scrap += Math.max(0, Math.round(scrap));
@@ -184,6 +192,7 @@ export class LocalGateway implements MolehangGateway {
       ...this.state,
       parts: { ...this.state.parts },
       pulls: { ...this.state.pulls },
+      placements: { ...this.state.placements },
       titles: [...this.state.titles],
       log: this.state.log.map((e) => ({ ...e })),
     };
@@ -207,6 +216,7 @@ export class LocalGateway implements MolehangGateway {
             : null,
         parts: sanitizeInventory(parsed.parts),
         pulls: sanitizePulls(parsed.pulls),
+        placements: sanitizePlacements(parsed.placements),
         titles: Array.isArray(parsed.titles)
           ? parsed.titles.filter((t): t is string => typeof t === 'string')
           : [],
@@ -235,9 +245,24 @@ function fresh(now: number): PersistedState {
     lastCollectedAt: null,
     parts: emptyInventory(),
     pulls: { small: 0, medium: 0, large: 0 },
+    placements: {},
     titles: [],
     log: [],
   };
+}
+
+/** 저장된 배치를 검사해 들인다 — 숫자 3개짜리 배열만 통과 */
+export function sanitizePlacements(raw: unknown): Record<string, [number, number, number]> {
+  const out: Record<string, [number, number, number]> = {};
+  if (typeof raw !== 'object' || raw === null) return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(value) || value.length !== 3) continue;
+    const [x, y, z] = value;
+    if ([x, y, z].every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      out[key] = [x as number, y as number, z as number];
+    }
+  }
+  return out;
 }
 
 function sanitizePulls(raw: unknown): Record<PartTier, number> {

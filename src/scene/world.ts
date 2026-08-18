@@ -7,6 +7,7 @@ import {
 } from '../core/time-of-day.ts';
 import type { Inventory } from '../game/parts.ts';
 import { Motes } from '../fx/motes.ts';
+import { Arrange } from './arrange.ts';
 import { Birds } from './birds.ts';
 import { Boat } from './boat.ts';
 import { Clouds } from './clouds.ts';
@@ -41,8 +42,12 @@ export class World {
   private readonly foam: Foam;
   private readonly motes: Motes;
   private readonly sky: Sky;
+  private readonly arrange: Arrange;
   private readonly state: SkyState = createSkyState();
   private readonly target = new Vector3();
+
+  private arrangeDrop: (key: string, position: [number, number, number]) => void = () => {};
+  private arrangePick: (key: string | null) => void = () => {};
 
   private elapsed = 0;
   private lastFrame = 0;
@@ -91,6 +96,17 @@ export class World {
       this.motes.group,
     );
 
+    this.arrange = new Arrange(
+      canvas,
+      this.camera,
+      this.boat.localSpace,
+      () => this.boat.arrangeTargets,
+      {
+        onDrop: (key, position) => this.arrangeDrop(key, position),
+        onPick: (key) => this.arrangePick(key),
+      },
+    );
+
     this.resize();
     globalThis.addEventListener('resize', this.resize);
   }
@@ -104,8 +120,43 @@ export class World {
   }
 
   /** 인벤토리를 배에 반영 */
-  setParts(inventory: Inventory, animateNew = false): void {
-    this.boat.setParts(inventory, animateNew);
+  setParts(
+    inventory: Inventory,
+    animateNew = false,
+    placements?: Record<string, [number, number, number]>,
+  ): void {
+    this.boat.setParts(inventory, animateNew, placements);
+  }
+
+  /** 배치 모드 켜기/끄기 */
+  setArrangeMode(active: boolean): void {
+    this.arrange.setActive(active);
+  }
+
+  /**
+   * 부품이 화면 어디에 찍히는지 (CSS 픽셀).
+   * 배치 드래그를 자동 검증할 때 쓴다 — 좌표를 찍어 보지 않으면 테스트가 허공을 집는다.
+   */
+  partScreenPositions(): Array<{ key: string; x: number; y: number }> {
+    const w = globalThis.innerWidth;
+    const h = globalThis.innerHeight;
+    const v = new Vector3();
+    return this.boat.arrangeTargets.map((target) => {
+      target.object.getWorldPosition(v).project(this.camera);
+      return {
+        key: target.key,
+        x: ((v.x + 1) / 2) * w,
+        y: ((1 - v.y) / 2) * h,
+      };
+    });
+  }
+
+  onArrangeDrop(fn: (key: string, position: [number, number, number]) => void): void {
+    this.arrangeDrop = fn;
+  }
+
+  onArrangePick(fn: (key: string | null) => void): void {
+    this.arrangePick = fn;
   }
 
   /** 배에 달린 등불 총량 — 밤에 배가 보이는 정도를 결정한다 */
@@ -208,6 +259,7 @@ export class World {
 
   dispose(): void {
     this.stop();
+    this.arrange.dispose();
     globalThis.removeEventListener('resize', this.resize);
     this.sky.dispose();
     this.ocean.dispose();

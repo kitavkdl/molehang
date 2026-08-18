@@ -34,6 +34,8 @@ export interface PersistedState {
   parts: Inventory;
   /** 등급별 뽑기 횟수 — 가격 상승에 쓴다 */
   pulls: Record<PartTier, number>;
+  /** 사용자가 끌어 놓은 부품 위치. 키는 "kind#순번", 없으면 격자 기본 자리 */
+  placements: Record<string, [number, number, number]>;
   /** 한 번이라도 달성한 칭호 id */
   titles: string[];
   log: CollectLogEntry[];
@@ -74,6 +76,8 @@ export interface MolehangGateway {
   draw(tier: PartTier, now: number): Promise<DrawOutcome>;
   /** 장착 확정. remove 를 주면 그 부품을 하나 빼고 자리를 만든다 */
   install(kind: PartKind, remove: PartKind | null, now: number): Promise<InstallOutcome>;
+  /** 부품을 끌어 놓은 자리를 저장. null 이면 기본 자리로 되돌린다 */
+  setPlacements(placements: Record<string, [number, number, number]>): Promise<PersistedState>;
   /** 친구가 보내온 몫 */
   receiveGift(now: number, scrap: number): Promise<PersistedState>;
   /** 수거 기록 (최신순) */

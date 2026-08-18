@@ -54,12 +54,24 @@
 
       <div class="toasts" id="toasts" aria-live="polite"></div>
 
+      <!-- 배치 모드 안내 -->
+      <div class="arrange-bar" id="arrange-bar" hidden>
+        <span class="arrange-bar__hint" id="arrange-hint">부품을 끌어서 옮기세요</span>
+        <div class="arrange-bar__actions">
+          <button class="ghost-btn" id="arrange-reset" type="button">자동 정렬</button>
+          <button class="arrange-bar__done" id="arrange-done" type="button">완료</button>
+        </div>
+      </div>
+
       <!-- 하단: 지갑 + 뽑기 + 수거 -->
       <footer class="dock">
-        <div class="wallet">
-          <span class="wallet__icon" aria-hidden="true">◆</span>
-          <span class="wallet__amount" id="wallet-amount">0</span>
-          <span class="wallet__label" id="wallet-label">고철</span>
+        <div class="dock__row">
+          <div class="wallet">
+            <span class="wallet__icon" aria-hidden="true">◆</span>
+            <span class="wallet__amount" id="wallet-amount">0</span>
+            <span class="wallet__label" id="wallet-label">고철</span>
+          </div>
+          <button class="chip chip--arrange" id="arrange-toggle" type="button">배치</button>
         </div>
 
         <div class="draws" id="draws">

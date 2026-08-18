@@ -98,6 +98,63 @@ export function placementFor(zone: PartZone, index: number): Placement {
 }
 
 // ---------------------------------------------------------------------------
+// 배치 커스텀 — 구역 **안에서만** 자유롭다
+// ---------------------------------------------------------------------------
+
+export interface ZoneBounds {
+  x: [number, number];
+  y: [number, number];
+  z: [number, number];
+  /** 좌우 어느 한쪽 면에 붙는 구역(현측)은 가까운 쪽으로 스냅한다 */
+  snapSides?: boolean;
+  /** 드래그 평면의 법선 (배 로컬 기준) */
+  plane: 'horizontal' | 'sideways' | 'vertical';
+}
+
+/**
+ * 구역별로 끌고 다닐 수 있는 범위.
+ *
+ * 자유롭게 두면 부품이 허공이나 선체 안쪽에 박힌다. "일정 부분 안에서 자유롭게" 라는
+ * 규칙은 이 상자 안에서만 움직인다는 뜻이다.
+ */
+export const ZONE_BOUNDS: Record<PartZone, ZoneBounds> = {
+  deck: {
+    x: [-HALF_B * 0.62, HALF_B * 0.62],
+    y: [DECK_Y + 0.28, DECK_Y + 2.6],
+    z: [-HALF_L * 0.62, HALF_L * 0.6],
+    plane: 'horizontal',
+  },
+  side: {
+    x: [-HALF_B * 0.9, HALF_B * 0.9],
+    y: [DECK_Y - 0.72, DECK_Y + 1.2],
+    z: [-HALF_L * 0.62, HALF_L * 0.58],
+    snapSides: true,
+    plane: 'sideways',
+  },
+  mast: {
+    x: [-0.12, 0.12],
+    y: [DECK_Y + 1.6, DECK_Y + 9.5],
+    z: [0.2, 0.7],
+    plane: 'vertical',
+  },
+  stern: {
+    x: [-HALF_B * 0.55, HALF_B * 0.55],
+    y: [DECK_Y - 0.15, DECK_Y + 2.4],
+    z: [-HALF_L + 0.2, -HALF_L + 1.4],
+    plane: 'horizontal',
+  },
+};
+
+const clamp = (v: number, [lo, hi]: [number, number]): number => (v < lo ? lo : v > hi ? hi : v);
+
+/** 끌어 놓은 자리를 구역 안으로 밀어 넣는다 */
+export function clampToZone(zone: PartZone, x: number, y: number, z: number): [number, number, number] {
+  const b = ZONE_BOUNDS[zone];
+  const cx = b.snapSides === true ? Math.sign(x || 1) * HALF_B * 0.88 : clamp(x, b.x);
+  return [cx, clamp(y, b.y), clamp(z, b.z)];
+}
+
+// ---------------------------------------------------------------------------
 // 지오메트리 — 종류당 한 번만 만들어 재사용한다
 // ---------------------------------------------------------------------------
 
@@ -247,6 +304,11 @@ function materialFor(role: keyof typeof PART_COLORS): FlatMaterial {
     materials.set(role, m);
   }
   return m;
+}
+
+/** 부품 하나를 식별하는 키 — 배치 저장의 단위 */
+export function partKey(kind: PartKind, indexOfKind: number): string {
+  return `${kind}#${indexOfKind}`;
 }
 
 /** 파츠 하나를 그룹으로 만들어 준다 */

@@ -43,6 +43,8 @@ export interface GameSnapshot {
   canCollect: boolean;
 
   parts: Inventory;
+  /** 사용자가 끌어 놓은 부품 위치 */
+  placements: Record<string, [number, number, number]>;
   partCount: number;
   slotsUsed: number;
   slotsMax: number;
@@ -97,6 +99,7 @@ export class Game {
       lastCollectedAt: null,
       parts: emptyInventory(),
       pulls: { small: 0, medium: 0, large: 0 },
+      placements: {},
       titles: [],
       log: [],
     };
@@ -175,6 +178,7 @@ export class Game {
       canCollect: Math.floor(result.pending) >= this.config.minCollect,
 
       parts,
+      placements: this.persisted.placements,
       partCount: totalParts(parts),
       slotsUsed: usedSlots(parts),
       slotsMax: maxSlots(parts, this.config.baseSlots),
@@ -235,6 +239,23 @@ export class Game {
     this.persisted = outcome.state;
     this.emitChange(this.snapshot());
     return outcome;
+  }
+
+  /** 끌어 놓은 자리를 저장한다 (드래그가 끝날 때마다) */
+  async savePlacement(key: string, position: [number, number, number]): Promise<void> {
+    if (!this.ready) return;
+    this.persisted = await this.gateway.setPlacements({
+      ...this.persisted.placements,
+      [key]: position,
+    });
+    this.emitChange(this.snapshot());
+  }
+
+  /** 전부 기본 격자 자리로 되돌린다 */
+  async resetPlacements(): Promise<void> {
+    if (!this.ready) return;
+    this.persisted = await this.gateway.setPlacements({});
+    this.emitChange(this.snapshot());
   }
 
   titleById(id: string | null): ShipTitle | null {
