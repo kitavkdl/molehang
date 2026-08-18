@@ -4,3 +4,4 @@ dist/
 *.local
 .vite/
 npm-debug.log*
+docs/shots/probe-*.png
