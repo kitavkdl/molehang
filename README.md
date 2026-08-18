@@ -90,14 +90,23 @@ npm run dev
 
 ## 배포
 
-`main` 에 푸시하면 GitHub Actions 가 빌드해서 GitHub Pages 로 올린다 (`.github/workflows/deploy.yml`).
-저장소에서 **Settings → Pages → Source 를 "GitHub Actions"** 로 한 번만 바꿔 주면 그다음부터 자동이다.
+**Vercel** 이 이 저장소를 물고 있다. `main` 에 푸시하면 자동 배포된다.
+설정은 `vercel.json` 에 있다 — 빌드는 `npm run build`(타입 검사 포함), 산출물은 `dist`.
+`vite.config.ts` 의 `base: './'` 덕분에 어떤 경로에 올려도 애셋이 깨지지 않는다.
+
+`npm run build` 는 `tsc --noEmit` 를 먼저 돌리므로 **타입 에러가 있으면 배포가 막힌다.**
+이건 의도된 안전장치다.
 
 파일 하나로 만들어 그냥 열거나 아무 데나 올리고 싶다면:
 
 ```bash
 npm run build && npm run build:standalone   # dist/molehang-standalone.html
 ```
+
+### 로그인 메일 (Resend)
+
+Supabase 의 SMTP 로 Resend 를 물려 두었다. 코드가 아니라 링크가 나간다면
+**Authentication → Email Templates → Magic Link** 에 `{{ .Token }}` 이 들어 있는지 확인할 것.
 
 ## 구조
 
