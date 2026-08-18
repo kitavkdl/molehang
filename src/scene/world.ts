@@ -1,10 +1,19 @@
 import { NoToneMapping, PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three';
-import { createSkyState, evaluateSky, type SkyState, type TimeOfDaySource } from '../core/time-of-day.ts';
+import {
+  createSkyState,
+  evaluateSky,
+  type SkyState,
+  type TimeOfDaySource,
+} from '../core/time-of-day.ts';
+import type { Inventory } from '../game/parts.ts';
 import { Motes } from '../fx/motes.ts';
+import { Birds } from './birds.ts';
 import { Boat } from './boat.ts';
 import { Clouds } from './clouds.ts';
 import { updateFlatLighting } from './flat-material.ts';
+import { Foam } from './foam.ts';
 import { framingFor } from './framing.ts';
+import { Islands } from './islands.ts';
 import { Lights } from './lights.ts';
 import { Ocean } from './ocean.ts';
 import { ShadowBlob } from './shadow-blob.ts';
@@ -25,8 +34,11 @@ export class World {
   private readonly renderer: WebGLRenderer;
   private readonly ocean: Ocean;
   private readonly clouds: Clouds;
+  private readonly islands: Islands;
+  private readonly birds: Birds;
   private readonly lights: Lights;
   private readonly shadow: ShadowBlob;
+  private readonly foam: Foam;
   private readonly motes: Motes;
   private readonly sky: Sky;
   private readonly state: SkyState = createSkyState();
@@ -53,22 +65,28 @@ export class World {
     // 플랫하고 쨍한 색을 유지하려면 톤매핑을 끈다. (CLAUDE.md §3.3)
     this.renderer.toneMapping = NoToneMapping;
 
-    this.camera = new PerspectiveCamera(42, 1, 0.1, 900);
+    this.camera = new PerspectiveCamera(40, 1, 0.1, 900);
 
     this.sky = new Sky();
     this.ocean = new Ocean();
+    this.islands = new Islands();
     this.clouds = new Clouds();
+    this.birds = new Birds();
     this.lights = new Lights();
     this.boat = new Boat();
     this.shadow = new ShadowBlob();
+    this.foam = new Foam();
     this.motes = new Motes();
 
     this.scene.add(
       this.sky.mesh,
       this.lights.group,
+      this.islands.group,
       this.ocean.group,
       this.clouds.group,
+      this.birds.group,
       this.shadow.mesh,
+      this.foam.group,
       this.boat.group,
       this.motes.group,
     );
@@ -83,6 +101,11 @@ export class World {
 
   setFill(fill: number): void {
     this.motes.setFill(fill);
+  }
+
+  /** 인벤토리를 배에 반영 */
+  setParts(inventory: Inventory, animateNew = false): void {
+    this.boat.setParts(inventory, animateNew);
   }
 
   /** 수거 연출: 결정들이 갑판 상자로 빨려 들어가고 배가 튄다 */
@@ -123,14 +146,17 @@ export class World {
     this.lights.update(this.state);
     updateFlatLighting(this.state);
     this.ocean.update(this.state, this.elapsed);
+    this.islands.update(this.state);
     this.clouds.update(this.state, dt);
+    this.birds.update(this.state, this.elapsed);
     this.boat.update(this.elapsed, dt);
     this.shadow.update(this.elapsed);
+    this.foam.update(this.state, this.elapsed);
     this.motes.update(this.elapsed, dt, this.boat.collectTarget);
 
     // 아주 느린 카메라 흔들림 — 정적인 화면이 되지 않게
-    const sway = Math.sin(this.elapsed * 0.13) * 0.34;
-    const lift = Math.sin(this.elapsed * 0.19) * 0.11;
+    const sway = Math.sin(this.elapsed * 0.13) * 0.3;
+    const lift = Math.sin(this.elapsed * 0.19) * 0.09;
     const framing = framingFor(this.camera.aspect);
     this.camera.position.set(sway, framing.height + lift, framing.distance);
     this.target.set(0, framing.targetY, 0);
@@ -180,10 +206,13 @@ export class World {
     globalThis.removeEventListener('resize', this.resize);
     this.sky.dispose();
     this.ocean.dispose();
+    this.islands.dispose();
     this.clouds.dispose();
+    this.birds.dispose();
     this.lights.dispose();
     this.boat.dispose();
     this.shadow.dispose();
+    this.foam.dispose();
     this.motes.dispose();
     this.renderer.dispose();
   }

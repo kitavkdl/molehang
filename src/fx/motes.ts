@@ -6,7 +6,7 @@ import { FX_COLORS } from '../style/palette.ts';
  * 쌓인 자원 = 배 주위를 도는 작은 결정들.
  * 수거하면 전부 갑판 상자로 빨려 들어간다. (CLAUDE.md §2-3)
  */
-const COUNT = 18;
+const COUNT = 12;
 const FLIGHT = 0.62;
 
 type Mode = 'idle' | 'fly';
@@ -40,7 +40,7 @@ export class Motes {
     this.materials.push(matA, matB);
 
     for (let i = 0; i < COUNT; i++) {
-      const geo = new OctahedronGeometry(0.115 + (i % 3) * 0.022, 0);
+      const geo = new OctahedronGeometry(0.1 + (i % 3) * 0.018, 0);
       this.geometries.push(geo);
       const mesh = new Mesh(geo, i % 4 === 0 ? matB : matA);
       mesh.visible = false;
@@ -48,9 +48,10 @@ export class Motes {
       this.motes.push({
         mesh,
         angle: (i / COUNT) * Math.PI * 2 + (i % 3) * 0.4,
-        // 선체(길이 6.3 / 폭 2.4) 바깥을 돌도록 — 안쪽으로 파고들면 지저분해진다
-        radius: 3.4 + ((i * 7) % 5) * 0.3,
-        baseY: 0.9 + ((i * 3) % 4) * 0.4,
+        // 배 가까이 붙어 돌아야 "배로 모이는 자원"으로 읽힌다.
+        // 넓게 흩어 놓으면 바다에 떠다니는 쓰레기처럼 보인다.
+        radius: 2.6 + ((i * 7) % 5) * 0.22,
+        baseY: 1.0 + ((i * 3) % 4) * 0.3,
         spin: 0.6 + ((i * 5) % 7) * 0.12,
         mode: 'idle',
         t: 0,
@@ -124,7 +125,7 @@ export class Motes {
       m.mesh.position.set(
         Math.cos(a) * m.radius,
         m.baseY + Math.sin(elapsed * 1.15 + m.angle * 2) * 0.16,
-        Math.sin(a) * m.radius * 1.15,
+        Math.sin(a) * m.radius * 1.3,
       );
       m.mesh.rotation.y += dt * m.spin;
       m.mesh.rotation.x += dt * m.spin * 0.6;

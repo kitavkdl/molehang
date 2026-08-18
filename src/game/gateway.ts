@@ -1,3 +1,5 @@
+import type { Inventory, PartKind } from './parts.ts';
+
 /**
  * 저장소 경계.
  *
@@ -16,6 +18,8 @@ export interface CollectLogEntry {
   total: number;
   /** 직전 수거로부터 흐른 시간(ms). 첫 수거면 null */
   sinceMs: number | null;
+  /** 이번 수거로 배에 붙은 파츠 */
+  parts: PartKind[];
 }
 
 export interface PersistedState {
@@ -27,6 +31,10 @@ export interface PersistedState {
   lifetime: number;
   /** 마지막 수거 시각. 아직 없으면 null */
   lastCollectedAt: number | null;
+  /** 배에 붙어 있는 파츠 (전부 장착된다 — 보관함이 아니다) */
+  parts: Inventory;
+  /** 한 번이라도 달성한 칭호 id */
+  titles: string[];
   log: CollectLogEntry[];
 }
 
@@ -35,6 +43,10 @@ export interface CollectOutcome {
   /** 실제로 수거된 양. 0이면 수거 실패(자원 부족) */
   taken: number;
   entry: CollectLogEntry | null;
+  /** 이번에 새로 붙은 파츠 */
+  gainedParts: PartKind[];
+  /** 이번 수거로 처음 달성한 칭호 id (없으면 null) */
+  newTitleId: string | null;
 }
 
 export interface MolehangGateway {

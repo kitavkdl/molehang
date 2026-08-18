@@ -88,7 +88,7 @@ export interface SkyState {
   oceanDeep: Color;
   oceanMid: Color;
   oceanCrest: Color;
-  underside: Color;
+  island: Color;
   cloud: Color;
   sunLight: Color;
   hemiSky: Color;
@@ -97,6 +97,8 @@ export interface SkyState {
   sunIntensity: number;
   hemiIntensity: number;
   starIntensity: number;
+  /** 바다 위 해/달 반사 길의 세기 */
+  glintIntensity: number;
   /** 조명 방향 */
   sunDir: Vector3;
   /** 하늘에 그려지는 해/달 원반 방향 (조명과 분리) */
@@ -115,7 +117,7 @@ function blank(): SkyState {
     oceanDeep: new Color(),
     oceanMid: new Color(),
     oceanCrest: new Color(),
-    underside: new Color(),
+    island: new Color(),
     cloud: new Color(),
     sunLight: new Color(),
     hemiSky: new Color(),
@@ -124,6 +126,7 @@ function blank(): SkyState {
     sunIntensity: 1,
     hemiIntensity: 1,
     starIntensity: 0,
+    glintIntensity: 0,
     sunDir: new Vector3(0, 1, 0),
     discDir: new Vector3(0, 1, 0),
   };
@@ -158,7 +161,7 @@ export function evaluateSky(hour: number, out: SkyState = blank()): SkyState {
   mixInto(out.oceanDeep, from, to, t, (p) => col(PHASE_COLORS[p].ocean.deep));
   mixInto(out.oceanMid, from, to, t, (p) => col(PHASE_COLORS[p].ocean.mid));
   mixInto(out.oceanCrest, from, to, t, (p) => col(PHASE_COLORS[p].ocean.crest));
-  mixInto(out.underside, from, to, t, (p) => col(PHASE_COLORS[p].underside));
+  mixInto(out.island, from, to, t, (p) => col(PHASE_COLORS[p].island));
   mixInto(out.cloud, from, to, t, (p) => col(PHASE_COLORS[p].cloud));
   mixInto(out.sunLight, from, to, t, (p) => col(PHASE_COLORS[p].sunLight));
   mixInto(out.hemiSky, from, to, t, (p) => col(PHASE_COLORS[p].hemiSky));
@@ -170,6 +173,7 @@ export function evaluateSky(hour: number, out: SkyState = blank()): SkyState {
   out.sunIntensity = la.sun + (lb.sun - la.sun) * t;
   out.hemiIntensity = la.hemi + (lb.hemi - la.hemi) * t;
   out.starIntensity = la.star + (lb.star - la.star) * t;
+  out.glintIntensity = la.glint + (lb.glint - la.glint) * t;
 
   lerpDir(out.sunDir, PHASE_SUN_DIR[from], PHASE_SUN_DIR[to], t);
   lerpDir(out.discDir, PHASE_DISC_DIR[from], PHASE_DISC_DIR[to], t);

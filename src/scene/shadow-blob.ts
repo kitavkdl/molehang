@@ -1,6 +1,6 @@
 import { CircleGeometry, Color, Mesh, ShaderMaterial } from 'three';
 import { int, BOAT_COLORS } from '../style/palette.ts';
-import { BOAT_YAW } from './boat.ts';
+import { BOAT_YAW } from './hull.ts';
 import { sampleWave } from './ocean.ts';
 
 /**
@@ -58,7 +58,7 @@ export class ShadowBlob {
     this.mesh.position.y = sampleWave(0, 0, elapsed).height + 0.035;
     const pulse = 1 + 0.04 * Math.sin(elapsed * 1.1);
     // 선체가 길쭉하니 그림자도 같은 비율로 늘린다
-    this.mesh.scale.set(0.68 * pulse, pulse, 1);
+    this.mesh.scale.set(0.6 * pulse, pulse, 1);
   }
 
   dispose(): void {

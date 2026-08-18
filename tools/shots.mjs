@@ -1,9 +1,9 @@
 /**
- * 4개 시간대 스크린샷 + 밝기 자동 검증.
+ * 스크린샷 + 밝기 자동 검증.
  *
  *   npm run shots
  *
- * dev 서버를 직접 띄우고, 모바일 세로 뷰포트로 낮/노을/밤/새벽을 찍어
+ * 모바일 세로 4개 시간대, PC 가로 2개, 그리고 튜토리얼·수거·시트·괴상한 배까지
  * docs/shots/ 에 저장한다. 화면이 어두우면(§3.4) 종료 코드 1로 실패시킨다.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -20,16 +20,16 @@ const BASE = `http://127.0.0.1:${PORT}`;
 /** CLAUDE.md §3.4 — 어둡거나 칙칙하면 실패 */
 const MIN_MEAN_LUMINANCE = 0.34;
 
-const SHOTS = [
-  { name: 'day', phase: 'day', label: '낮', res: '420' },
-  { name: 'dusk', phase: 'dusk', label: '노을', res: 'full' },
-  { name: 'night', phase: 'night', label: '밤', res: '150' },
-  { name: 'dawn', phase: 'dawn', label: '새벽', res: '300' },
+const MOBILE = { width: 390, height: 844 };
+const DESKTOP = { width: 1440, height: 900 };
+
+const PHASE_SHOTS = [
+  { name: 'day', phase: 'day', label: '낮', res: '420', parts: 'window*3,sail,barrel' },
+  { name: 'dusk', phase: 'dusk', label: '노을', res: 'full', parts: 'engine*2,chimney*2,lantern*2' },
+  { name: 'night', phase: 'night', label: '밤', res: '150', parts: 'lantern*5,window*4' },
+  { name: 'dawn', phase: 'dawn', label: '새벽', res: '300', parts: 'moss*4,sail*2' },
 ];
 
-const VIEWPORT = { width: 390, height: 844 };
-
-/** vite 를 자식 프로세스가 아니라 같은 프로세스에서 띄운다 — 확실하게 정리되도록 */
 async function startDevServer() {
   const server = await createServer({
     root: ROOT,
@@ -38,6 +38,45 @@ async function startDevServer() {
   });
   await server.listen();
   return server;
+}
+
+function url(query) {
+  return `${BASE}/?${query}&probe=1&notutorial=1`;
+}
+
+const MOBILE_CTX = {
+  viewport: MOBILE,
+  deviceScaleFactor: 2,
+  isMobile: true,
+  hasTouch: true,
+  locale: 'ko-KR',
+  timezoneId: 'Asia/Seoul',
+};
+
+const DESKTOP_CTX = {
+  viewport: DESKTOP,
+  deviceScaleFactor: 1,
+  locale: 'ko-KR',
+  timezoneId: 'Asia/Seoul',
+};
+
+/**
+ * 컷마다 새 컨텍스트를 판다. 같은 컨텍스트를 재사용하면 localStorage 가 공유돼
+ * `?parts=` 가 누적되고 스크린샷이 매번 달라진다.
+ */
+async function openScene(browser, ctxOptions, query) {
+  const context = await browser.newContext(ctxOptions);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await page.goto(query, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__MOLEHANG_READY__ === true, null, { timeout: 25_000 });
+  // 파도·구름이 자리를 잡도록 몇 초 흘려보낸다
+  await page.waitForTimeout(2500);
+  return { page, errors, context };
 }
 
 async function main() {
@@ -50,63 +89,95 @@ async function main() {
   const report = [];
   let failed = false;
 
+  const check = (name, label, probe, errors) => {
+    const mean = probe?.mean ?? 0;
+    const ok = mean >= MIN_MEAN_LUMINANCE && errors.length === 0;
+    if (!ok) failed = true;
+    report.push({ name, label, mean, p10: probe?.p10 ?? 0, errors, ok });
+    console.log(
+      `${ok ? 'OK  ' : 'FAIL'} ${name.padEnd(14)} ${label.padEnd(5)} ` +
+        `평균휘도 ${mean.toFixed(3)} (하위10% ${(probe?.p10 ?? 0).toFixed(3)})` +
+        (errors.length ? ` — 에러 ${errors.length}건: ${errors[0]}` : ''),
+    );
+  };
+
   try {
-    const context = await browser.newContext({
-      viewport: VIEWPORT,
-      deviceScaleFactor: 2,
-      isMobile: true,
-      hasTouch: true,
-      locale: 'ko-KR',
-      timezoneId: 'Asia/Seoul',
-    });
-
-    for (const shot of SHOTS) {
-      const page = await context.newPage();
-      const errors = [];
-      page.on('pageerror', (e) => errors.push(String(e)));
-      page.on('console', (m) => {
-        if (m.type() === 'error') errors.push(m.text());
-      });
-
-      await page.goto(`${BASE}/?phase=${shot.phase}&res=${shot.res}&probe=1`, {
-        waitUntil: 'load',
-      });
-      await page.waitForFunction(() => window.__MOLEHANG_READY__ === true, null, {
-        timeout: 20_000,
-      });
-      // 파도·구름이 자리를 잡도록 몇 초 흘려보낸다
-      await page.waitForTimeout(2500);
-
-      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
-      const file = path.join(OUT, `${shot.name}.png`);
-      await page.screenshot({ path: file });
-
-      const mean = probe?.mean ?? 0;
-      const ok = mean >= MIN_MEAN_LUMINANCE && errors.length === 0;
-      if (!ok) failed = true;
-
-      report.push({ ...shot, mean, p10: probe?.p10 ?? 0, errors, ok });
-      console.log(
-        `${ok ? 'OK  ' : 'FAIL'} ${shot.name.padEnd(6)} ${shot.label.padEnd(3)} ` +
-          `평균휘도 ${mean.toFixed(3)} (하위10% ${(probe?.p10 ?? 0).toFixed(3)})` +
-          (errors.length ? ` — 에러 ${errors.length}건: ${errors[0]}` : ''),
+    // --- 모바일 4개 시간대 ---
+    for (const shot of PHASE_SHOTS) {
+      const { page, errors, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url(`phase=${shot.phase}&res=${shot.res}&parts=${shot.parts}`),
       );
-      await page.close();
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await page.screenshot({ path: path.join(OUT, `${shot.name}.png`) });
+      check(shot.name, shot.label, probe, errors);
+      await context.close();
     }
 
-    // 수거 연출도 한 장 남긴다
-    const fx = await context.newPage();
-    await fx.goto(`${BASE}/?phase=day&res=full&probe=1`, { waitUntil: 'load' });
-    await fx.waitForFunction(() => window.__MOLEHANG_READY__ === true, null, { timeout: 20_000 });
-    await fx.waitForTimeout(1500);
-    await fx.evaluate(() => window.molehang?.collect());
-    await fx.waitForTimeout(240);
-    await fx.screenshot({ path: path.join(OUT, 'collect.png') });
-    await fx.waitForTimeout(400);
-    await fx.click('#open-sheet');
-    await fx.waitForTimeout(600);
-    await fx.screenshot({ path: path.join(OUT, 'sheet.png') });
-    await fx.close();
+    // --- 수거 연출 + 시트 ---
+    {
+      const { page, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=day&res=full&parts=engine*2,window*2,moss*2'),
+      );
+      await page.evaluate(() => window.molehang?.collect());
+      await page.waitForTimeout(260);
+      await page.screenshot({ path: path.join(OUT, 'collect.png') });
+      await page.waitForTimeout(500);
+      await page.click('#open-sheet');
+      await page.waitForTimeout(650);
+      await page.screenshot({ path: path.join(OUT, 'sheet.png') });
+      await context.close();
+    }
+
+    // --- 튜토리얼 (첫 방문 · 저장 없는 새 컨텍스트) ---
+    {
+      const context = await browser.newContext(MOBILE_CTX);
+      const page = await context.newPage();
+      await page.goto(`${BASE}/?phase=day&res=200`, { waitUntil: 'load' });
+      await page.waitForFunction(() => window.__MOLEHANG_READY__ === true, null, { timeout: 25_000 });
+      await page.waitForTimeout(1600);
+      await page.screenshot({ path: path.join(OUT, 'tutorial-1.png') });
+      await page.click('#tutorial-next');
+      await page.waitForTimeout(500);
+      await page.click('#tutorial-next');
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: path.join(OUT, 'tutorial-3.png') });
+      await context.close();
+    }
+
+    // --- 괴상한 배 (바이럴용) ---
+    {
+      const { page, errors, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=dusk&res=full&parts=engine*12,chimney*6,moss*8,cannon*4,lantern*4'),
+      );
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await page.screenshot({ path: path.join(OUT, 'cursed-ship.png') });
+      check('cursed-ship', '괴선', probe, errors);
+      await context.close();
+    }
+
+    // --- PC ---
+    for (const shot of [PHASE_SHOTS[0], PHASE_SHOTS[1]]) {
+      const { page, errors, context } = await openScene(
+        browser,
+        DESKTOP_CTX,
+        url(`phase=${shot.phase}&res=${shot.res}&parts=engine*3,window*5,sail*2,lantern*3,moss*3`),
+      );
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await page.screenshot({ path: path.join(OUT, `desktop-${shot.name}.png`) });
+      check(`desktop-${shot.name}`, shot.label, probe, errors);
+      if (shot === PHASE_SHOTS[0]) {
+        await page.click('#open-sheet');
+        await page.waitForTimeout(700);
+        await page.screenshot({ path: path.join(OUT, 'desktop-sheet.png') });
+      }
+      await context.close();
+    }
 
     await writeFile(
       path.join(OUT, 'report.json'),

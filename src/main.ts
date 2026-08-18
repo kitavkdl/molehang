@@ -10,11 +10,13 @@ import {
 import { GAME_CONFIG } from './game/config.ts';
 import { Game } from './game/game.ts';
 import { LocalGateway } from './game/local-gateway.ts';
-import { applyThemeVars } from './style/palette.ts';
+import { PART_KINDS, type PartKind } from './game/parts.ts';
 import { World } from './scene/world.ts';
+import { PHASES, applyThemeVars, type Phase } from './style/palette.ts';
 import { Hud } from './ui/hud.ts';
 import { LogSheet } from './ui/sheet.ts';
-import { PHASES, type Phase } from './style/palette.ts';
+import { Toasts } from './ui/toast.ts';
+import { Tutorial } from './ui/tutorial.ts';
 
 declare global {
   interface Window {
@@ -22,8 +24,10 @@ declare global {
       setHour(hour: number): void;
       setPhase(phase: Phase): void;
       setStored(amount: number): Promise<void>;
+      addParts(kinds: PartKind[]): Promise<void>;
       collect(): Promise<void>;
       reset(): Promise<void>;
+      tutorial(): void;
       sampleLuminance(): { mean: number; p10: number } | null;
     };
     __MOLEHANG_READY__?: boolean;
@@ -42,11 +46,20 @@ function boot(): void {
   const gateway = new LocalGateway(GAME_CONFIG);
   const game = new Game(gateway, clock, GAME_CONFIG);
 
-  // 연출 시각: 기본은 유저 로컬 시각, 디버그로 고정 가능
+  // 연출 시각: 기본은 **접속한 기기의 로컬 시각**, 디버그로만 고정 가능
   const timeSource: TimeOfDaySource = resolveTimeSource(params, clock);
-  const world = new World(canvas, timeSource, { probe: params.has('probe') || params.has('hour') || params.has('phase') });
+  const world = new World(canvas, timeSource, {
+    probe: params.has('probe') || params.has('hour') || params.has('phase'),
+  });
 
-  const sheet = new LogSheet(clock, () => game.log());
+  const toasts = new Toasts();
+  const tutorial = new Tutorial();
+  const sheet = new LogSheet(
+    clock,
+    () => game.log(),
+    () => game.snapshot(),
+    () => tutorial.start(),
+  );
   const hud = new Hud({
     onCollect: () => void onCollect(),
     onOpenLog: () => void sheet.show(),
@@ -55,10 +68,24 @@ function boot(): void {
   async function onCollect(): Promise<void> {
     const event = await game.collect();
     if (event === null) return;
+
     world.playCollect();
+    // 얻은 파츠는 전부 그 자리에서 배에 붙는다
+    world.setParts(event.snapshot.parts, true);
     hud.pulse();
     hud.render(event.snapshot);
     world.setFill(event.snapshot.fill);
+
+    toasts.parts(event.gainedParts);
+    if (event.newTitle !== null) {
+      globalThis.setTimeout(() => toasts.title(event.newTitle!), 420);
+    }
+  }
+
+  function paint(snap: ReturnType<typeof game.snapshot>): void {
+    hud.render(snap);
+    world.setFill(snap.fill);
+    world.setParts(snap.parts);
   }
 
   void (async () => {
@@ -74,18 +101,22 @@ function boot(): void {
       }
     }
 
-    hud.render(snap);
-    world.setFill(snap.fill);
+    // 디버그: 파츠 강제 (`?parts=engine*12,moss*4`)
+    const parts = params.get('parts');
+    if (parts !== null) {
+      await game.debugAddParts(parseParts(parts));
+      snap = game.snapshot();
+    }
+
+    paint(snap);
     world.start();
 
     // HUD 는 초당 4회만 갱신해도 충분하다 (렌더 루프와 분리)
-    globalThis.setInterval(() => {
-      const s = game.snapshot();
-      hud.render(s);
-      world.setFill(s.fill);
-    }, 250);
+    globalThis.setInterval(() => paint(game.snapshot()), 250);
 
     game.onCollect(() => void sheet.refresh());
+
+    if (!params.has('notutorial')) tutorial.autoStart();
 
     window.__MOLEHANG_READY__ = true;
   })();
@@ -100,19 +131,33 @@ function boot(): void {
     },
     async setStored(value: number) {
       await game.debugSetStored(value);
-      const s = game.snapshot();
-      hud.render(s);
-      world.setFill(s.fill);
+      paint(game.snapshot());
+    },
+    async addParts(kinds: PartKind[]) {
+      await game.debugAddParts(kinds);
+      paint(game.snapshot());
     },
     collect: onCollect,
     async reset() {
-      const s = await game.reset();
-      hud.render(s);
-      world.setFill(s.fill);
+      paint(await game.reset());
       await sheet.refresh();
     },
+    tutorial: () => tutorial.start(),
     sampleLuminance: () => world.sampleLuminance(),
   };
+}
+
+/** `engine*12,moss*4,cannon` 형식 */
+function parseParts(spec: string): PartKind[] {
+  const out: PartKind[] = [];
+  for (const chunk of spec.split(',')) {
+    const [name, times] = chunk.split('*');
+    const kind = (name ?? '').trim() as PartKind;
+    if (!(PART_KINDS as readonly string[]).includes(kind)) continue;
+    const n = Math.min(60, Math.max(1, Number.parseInt(times ?? '1', 10) || 1));
+    for (let i = 0; i < n; i++) out.push(kind);
+  }
+  return out;
 }
 
 function resolveTimeSource(params: URLSearchParams, clock: Clock): TimeOfDaySource {
@@ -127,6 +172,7 @@ function resolveTimeSource(params: URLSearchParams, clock: Clock): TimeOfDaySour
     return new FixedTimeOfDay(PHASE_ANCHOR_HOUR[phase as Phase]);
   }
 
+  // 기본값: 접속한 기기의 로컬 시각을 그대로 따라간다
   return new LocalTimeOfDay(clock);
 }
 

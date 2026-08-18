@@ -10,8 +10,12 @@ export class Hud {
   private readonly collectBtn = must('collect') as HTMLButtonElement;
   private readonly collectSub = must('collect-sub');
   private readonly openSheet = must('open-sheet');
+  private readonly titleBadge = must('title-badge');
+  private readonly titleName = must('title-name');
+  private readonly titleParts = must('title-parts');
 
   private lastShown = -1;
+  private lastTitleId = '';
 
   constructor(handlers: { onCollect: () => void; onOpenLog: () => void }) {
     this.collectBtn.addEventListener('click', () => {
@@ -19,6 +23,7 @@ export class Hud {
       handlers.onCollect();
     });
     this.openSheet.addEventListener('click', handlers.onOpenLog);
+    this.titleBadge.addEventListener('click', handlers.onOpenLog);
   }
 
   render(snap: GameSnapshot): void {
@@ -38,9 +43,19 @@ export class Hud {
 
     this.collectBtn.disabled = !snap.canCollect;
     this.collectBtn.classList.toggle('is-full', full);
-    this.collectSub.textContent = snap.canCollect
-      ? `${amount(shown)} 담기`
-      : '아직 모이는 중';
+    this.collectSub.textContent = snap.canCollect ? `${amount(shown)} 담기` : '아직 모이는 중';
+
+    if (snap.title.id !== this.lastTitleId) {
+      this.titleName.textContent = snap.title.name;
+      // 칭호가 바뀌면 배지가 한 번 반짝인다
+      if (this.lastTitleId !== '') {
+        this.titleBadge.classList.remove('is-new');
+        void this.titleBadge.offsetWidth;
+        this.titleBadge.classList.add('is-new');
+      }
+      this.lastTitleId = snap.title.id;
+    }
+    this.titleParts.textContent = `파츠 ${amount(snap.partCount)}`;
   }
 
   /** 수거 순간 버튼 피드백 */

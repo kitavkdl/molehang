@@ -2,6 +2,15 @@ import type { Clock } from '../core/clock.ts';
 import { accrue, fillRatio } from './accrual.ts';
 import { GAME_CONFIG, type GameConfig } from './config.ts';
 import type { CollectLogEntry, MolehangGateway, PersistedState } from './gateway.ts';
+import {
+  SHIP_TITLES,
+  currentTitle,
+  emptyInventory,
+  totalParts,
+  type Inventory,
+  type PartKind,
+  type ShipTitle,
+} from './parts.ts';
 
 export interface GameSnapshot {
   /** 지금 이 순간의 보유량 (게이트웨이 정산 + 프레임 보간) */
@@ -14,12 +23,21 @@ export interface GameSnapshot {
   lifetime: number;
   lastCollectedAt: number | null;
   canCollect: boolean;
+  /** 배에 붙어 있는 파츠 */
+  parts: Inventory;
+  partCount: number;
+  /** 현재 칭호 (파츠 구성에서 계산) */
+  title: ShipTitle;
+  /** 한 번이라도 달성한 칭호 id */
+  unlockedTitles: string[];
 }
 
 export interface CollectEvent {
   amount: number;
   entry: CollectLogEntry;
   snapshot: GameSnapshot;
+  gainedParts: PartKind[];
+  newTitle: ShipTitle | null;
 }
 
 /**
@@ -46,6 +64,8 @@ export class Game {
       stored: 0,
       lifetime: 0,
       lastCollectedAt: null,
+      parts: emptyInventory(),
+      titles: [],
       log: [],
     };
   }
@@ -96,6 +116,10 @@ export class Game {
       lifetime: this.persisted.lifetime,
       lastCollectedAt: this.persisted.lastCollectedAt,
       canCollect: Math.floor(result.stored) >= this.config.minCollect,
+      parts: this.persisted.parts,
+      partCount: totalParts(this.persisted.parts),
+      title: currentTitle(this.persisted.parts),
+      unlockedTitles: this.persisted.titles,
     };
   }
 
@@ -109,7 +133,16 @@ export class Game {
 
     if (outcome.taken <= 0 || outcome.entry === null) return null;
 
-    const event: CollectEvent = { amount: outcome.taken, entry: outcome.entry, snapshot: snap };
+    const event: CollectEvent = {
+      amount: outcome.taken,
+      entry: outcome.entry,
+      snapshot: snap,
+      gainedParts: outcome.gainedParts,
+      newTitle:
+        outcome.newTitleId === null
+          ? null
+          : (SHIP_TITLES.find((t) => t.id === outcome.newTitleId) ?? null),
+    };
     for (const fn of this.collectListeners) fn(event);
     return event;
   }
@@ -132,6 +165,16 @@ export class Game {
     };
     if (typeof gw.debugSetStored !== 'function') return;
     this.persisted = await gw.debugSetStored(amount);
+    this.emitChange(this.snapshot());
+  }
+
+  /** 디버그: 파츠 강제 장착 (`?parts=`) */
+  async debugAddParts(kinds: PartKind[]): Promise<void> {
+    const gw = this.gateway as MolehangGateway & {
+      debugAddParts?: (k: PartKind[]) => Promise<PersistedState>;
+    };
+    if (typeof gw.debugAddParts !== 'function') return;
+    this.persisted = await gw.debugAddParts(kinds);
     this.emitChange(this.snapshot());
   }
 

@@ -6,6 +6,13 @@ import type {
   MolehangGateway,
   PersistedState,
 } from './gateway.ts';
+import {
+  emptyInventory,
+  rollParts,
+  sanitizeInventory,
+  unlockedTitleIds,
+  type PartKind,
+} from './parts.ts';
 
 /**
  * localStorage 구현.
@@ -19,6 +26,7 @@ export class LocalGateway implements MolehangGateway {
   constructor(
     private readonly config: GameConfig = GAME_CONFIG,
     private readonly storage: Storage | null = safeStorage(),
+    private readonly rand: () => number = Math.random,
   ) {
     this.state = this.read();
   }
@@ -43,15 +51,25 @@ export class LocalGateway implements MolehangGateway {
     const { taken, left } = collectFrom(this.state.stored, this.config);
 
     if (taken <= 0) {
-      return { state: this.snapshot(), taken: 0, entry: null };
+      return { state: this.snapshot(), taken: 0, entry: null, gainedParts: [], newTitleId: null };
     }
 
+    // 얻은 파츠는 고를 수 없다 — 전부 그대로 배에 붙는다
+    const gained: PartKind[] = rollParts(taken, this.config.capacity, this.rand);
+    for (const kind of gained) this.state.parts[kind] += 1;
+
+    const before = new Set(this.state.titles);
+    const nowUnlocked = unlockedTitleIds(this.state.parts);
+    const fresh = nowUnlocked.filter((id) => !before.has(id));
+    this.state.titles = [...new Set([...this.state.titles, ...nowUnlocked])];
+
     const entry: CollectLogEntry = {
-      id: `${now.toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
+      id: `${now.toString(36)}-${Math.floor(this.rand() * 1e6).toString(36)}`,
       at: now,
       amount: taken,
       total: this.state.lifetime + taken,
       sinceMs: this.state.lastCollectedAt === null ? null : now - this.state.lastCollectedAt,
+      parts: gained,
     };
 
     this.state.stored = left;
@@ -63,11 +81,18 @@ export class LocalGateway implements MolehangGateway {
     }
     this.write();
 
-    return { state: this.snapshot(), taken, entry };
+    return {
+      state: this.snapshot(),
+      taken,
+      entry,
+      gainedParts: gained,
+      // 여러 개가 동시에 열리면 가장 희귀한(마지막) 것을 보여준다
+      newTitleId: fresh.length > 0 ? fresh[fresh.length - 1]! : null,
+    };
   }
 
   async log(limit = this.config.logLimit): Promise<CollectLogEntry[]> {
-    return this.state.log.slice(0, limit).map((e) => ({ ...e }));
+    return this.state.log.slice(0, limit).map((e) => ({ ...e, parts: [...e.parts] }));
   }
 
   async reset(): Promise<PersistedState> {
@@ -76,7 +101,7 @@ export class LocalGateway implements MolehangGateway {
     return this.snapshot();
   }
 
-  /** 데모/디버그 전용 — `?res=` 처리에 쓴다 */
+  /** 데모/디버그 전용 — `?res=` / `?parts=` 처리에 쓴다 */
   async debugSetStored(amount: number): Promise<PersistedState> {
     this.state.stored = Math.max(0, Math.min(this.config.capacity, amount));
     this.state.lastAccruedAt = Date.now();
@@ -84,8 +109,20 @@ export class LocalGateway implements MolehangGateway {
     return this.snapshot();
   }
 
+  async debugAddParts(kinds: PartKind[]): Promise<PersistedState> {
+    for (const kind of kinds) this.state.parts[kind] += 1;
+    this.state.titles = [...new Set([...this.state.titles, ...unlockedTitleIds(this.state.parts)])];
+    this.write();
+    return this.snapshot();
+  }
+
   private snapshot(): PersistedState {
-    return { ...this.state, log: this.state.log.map((e) => ({ ...e })) };
+    return {
+      ...this.state,
+      parts: { ...this.state.parts },
+      titles: [...this.state.titles],
+      log: this.state.log.map((e) => ({ ...e, parts: [...e.parts] })),
+    };
   }
 
   private read(): PersistedState {
@@ -103,7 +140,11 @@ export class LocalGateway implements MolehangGateway {
           typeof parsed.lastCollectedAt === 'number' && Number.isFinite(parsed.lastCollectedAt)
             ? parsed.lastCollectedAt
             : null,
-        log: Array.isArray(parsed.log) ? parsed.log.filter(isEntry) : [],
+        parts: sanitizeInventory(parsed.parts),
+        titles: Array.isArray(parsed.titles)
+          ? parsed.titles.filter((t): t is string => typeof t === 'string')
+          : [],
+        log: Array.isArray(parsed.log) ? parsed.log.filter(isEntry).map(normalizeEntry) : [],
       };
     } catch {
       return fresh(now);
@@ -120,7 +161,15 @@ export class LocalGateway implements MolehangGateway {
 }
 
 function fresh(now: number): PersistedState {
-  return { lastAccruedAt: now, stored: 0, lifetime: 0, lastCollectedAt: null, log: [] };
+  return {
+    lastAccruedAt: now,
+    stored: 0,
+    lifetime: 0,
+    lastCollectedAt: null,
+    parts: emptyInventory(),
+    titles: [],
+    log: [],
+  };
 }
 
 function num(v: unknown, fallback: number): number {
@@ -131,6 +180,11 @@ function isEntry(v: unknown): v is CollectLogEntry {
   if (typeof v !== 'object' || v === null) return false;
   const e = v as Partial<CollectLogEntry>;
   return typeof e.id === 'string' && typeof e.at === 'number' && typeof e.amount === 'number';
+}
+
+/** 파츠 시스템 이전 저장본과의 호환 */
+function normalizeEntry(e: CollectLogEntry): CollectLogEntry {
+  return { ...e, parts: Array.isArray(e.parts) ? e.parts : [] };
 }
 
 function safeStorage(): Storage | null {

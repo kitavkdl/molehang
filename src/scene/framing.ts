@@ -1,12 +1,10 @@
-import { SEA_RADIUS } from './ocean.ts';
-
 /**
- * 카메라 프레이밍. 세로 화면이 기준이고 가로는 곁다리. (CLAUDE.md §4)
+ * 카메라 프레이밍 — 씬 배치의 단일 출처. (CLAUDE.md §4.1)
  *
- * 구도 목표
- *  - 배가 화면 가운데를 크게 차지한다
- *  - 원반 바다의 **앞쪽 가장자리**가 프레임 안에 들어와서 "떠 있다"가 읽힌다
- *  - 가장자리 너머로 하늘과 (바다보다 낮은 고도의) 구름이 보인다
+ * 무한의 바다에서는 화면을 나누는 선이 **수평선 하나**뿐이다.
+ * 위는 하늘(구름·해/달), 아래는 바다(반사 길), 그 경계에 먼 섬 실루엣이 걸린다.
+ * 구름·새·섬은 전부 여기 값에서 자기 높이를 계산하므로,
+ * 카메라를 바꾸면 하늘 요소들이 알아서 따라온다.
  */
 export interface Framing {
   fov: number;
@@ -15,34 +13,30 @@ export interface Framing {
   targetY: number;
 }
 
-export const PORTRAIT: Framing = { fov: 38, height: 6.6, distance: 21, targetY: 1.35 };
-export const LANDSCAPE: Framing = { fov: 32, height: 7.2, distance: 24, targetY: 1.5 };
+/** 세로 — 배가 화면 폭의 80% 정도를 차지하고 수평선은 위쪽 1/3 */
+export const PORTRAIT: Framing = { fov: 40, height: 3.4, distance: 20, targetY: 1.35 };
 
-/** 세로/가로 판단 기준 */
-export const PORTRAIT_MAX_ASPECT = 0.8;
+/** 가로/PC — 더 가깝게 붙어 배가 히어로가 되도록 */
+export const LANDSCAPE: Framing = { fov: 32, height: 3.2, distance: 17, targetY: 1.35 };
+
+export const PORTRAIT_MAX_ASPECT = 0.85;
 
 export function framingFor(aspect: number): Framing {
   return aspect < PORTRAIT_MAX_ASPECT ? PORTRAIT : LANDSCAPE;
 }
 
-/**
- * 화면 구도를 결정하는 두 개의 시선.
- *
- *   FAR  : 원반의 **먼** 가장자리를 스치는 시선 — 이 위쪽이 하늘 영역
- *   NEAR : 원반의 **앞** 가장자리를 스치는 시선 — 이 아래쪽이 바다 밑 하늘
- *
- * 두 선 사이가 바다가 차지하는 띠다. 구름을 이 띠 바깥에 놓아야
- * 원반에 가리지 않고 "바다가 공중에 떠 있다"가 읽힌다.
- */
-const FAR_EDGE_SLOPE = PORTRAIT.height / (PORTRAIT.distance + SEA_RADIUS);
-const NEAR_EDGE_SLOPE = PORTRAIT.height / (PORTRAIT.distance - SEA_RADIUS);
+const DEG = Math.PI / 180;
 
-/** 먼 가장자리 위 하늘에 걸리는 최저 높이 */
-export function skyBandFloorY(depth: number): number {
-  return PORTRAIT.height - FAR_EDGE_SLOPE * depth;
+/**
+ * 카메라에서 depth 만큼 떨어진 곳에서, 수평선 위 elevation(도) 에 놓이는 높이.
+ * 구름·새를 "보이는 하늘 띠" 안에 정확히 앉히는 데 쓴다.
+ */
+export function skyY(depth: number, elevationDeg: number): number {
+  return PORTRAIT.height + depth * Math.tan(elevationDeg * DEG);
 }
 
-/** 앞 가장자리 **아래**로 보이는 최고 높이 — 바다 밑을 흐르는 구름용 */
-export function underSeaCeilY(depth: number): number {
-  return PORTRAIT.height - NEAR_EDGE_SLOPE * depth;
+/** 세로 화면에서 수평선 위로 보이는 최대 고도(도) — 이보다 높으면 화면 밖 */
+export function maxVisibleElevation(): number {
+  const pitchDown = Math.atan2(PORTRAIT.height - PORTRAIT.targetY, PORTRAIT.distance) / DEG;
+  return PORTRAIT.fov / 2 - pitchDown;
 }
