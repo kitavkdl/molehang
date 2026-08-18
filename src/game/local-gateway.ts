@@ -170,6 +170,11 @@ export class LocalGateway implements MolehangGateway {
     return this.snapshot();
   }
 
+  /** 게스트로 만든 배를 계정으로 가져갈 때 쓴다 */
+  snapshotForImport(): PersistedState {
+    return this.snapshot();
+  }
+
   private perSecond(): number {
     return productionPerSecond(this.state.parts, this.config.baseProduction);
   }

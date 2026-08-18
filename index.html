@@ -29,6 +29,9 @@
             <span class="chip__crew-bonus" id="crew-bonus"></span>
           </button>
           <button class="chip chip--lang" id="lang-toggle" type="button">EN</button>
+          <button class="chip chip--account" id="account-chip" type="button" aria-haspopup="dialog">
+            <span id="account-chip-label">게스트</span>
+          </button>
           <button class="chip" id="open-sheet" type="button" aria-haspopup="dialog">
             <span class="chip__dot" aria-hidden="true"></span>
             <span id="sheet-chip-label">기록</span>
@@ -153,6 +156,56 @@
         <p class="log__empty" id="log-empty"></p>
 
         <button class="ghost-btn" id="replay-tutorial" type="button">튜토리얼 다시 보기</button>
+      </div>
+    </section>
+
+    <!-- 계정 -->
+    <div class="scrim scrim--gacha" id="account-scrim" hidden></div>
+    <section class="account" id="account" role="dialog" aria-modal="true" hidden>
+      <div class="account__head">
+        <h2 class="account__title" id="account-title">계정</h2>
+        <button class="sheet__close" id="account-close" type="button" aria-label="닫기">✕</button>
+      </div>
+
+      <!-- 게스트: 이메일 입력 -->
+      <div class="account__pane" id="account-guest">
+        <p class="account__lead" id="account-guest-lead">
+          게스트로도 전부 즐길 수 있어요. 로그인하면 기기를 옮겨도 배가 남고, 여러 척을 굴릴 수 있습니다.
+        </p>
+        <label class="field">
+          <span class="field__label" id="account-email-label">이메일</span>
+          <input class="field__input" id="account-email" type="email" inputmode="email"
+                 autocomplete="email" placeholder="you@example.com" />
+        </label>
+        <button class="account__primary" id="account-send" type="button">인증코드 받기</button>
+        <p class="account__hint" id="account-guest-hint"></p>
+      </div>
+
+      <!-- 코드 입력 -->
+      <div class="account__pane" id="account-code" hidden>
+        <p class="account__lead" id="account-code-lead"></p>
+        <label class="field">
+          <span class="field__label" id="account-code-label">인증코드 6자리</span>
+          <input class="field__input field__input--code" id="account-otp" type="text"
+                 inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" />
+        </label>
+        <button class="account__primary" id="account-verify" type="button">확인</button>
+        <div class="account__row">
+          <button class="ghost-btn" id="account-resend" type="button">코드 다시 보내기</button>
+          <button class="ghost-btn" id="account-back" type="button">이메일 바꾸기</button>
+        </div>
+        <p class="account__hint" id="account-code-hint"></p>
+      </div>
+
+      <!-- 로그인 상태: 배 목록 -->
+      <div class="account__pane" id="account-ships" hidden>
+        <p class="account__lead" id="account-user"></p>
+        <ul class="ships" id="ship-list"></ul>
+        <button class="account__primary" id="ship-new" type="button">새 배 만들기</button>
+        <div class="account__row">
+          <button class="ghost-btn" id="account-signout" type="button">로그아웃</button>
+        </div>
+        <p class="account__hint" id="account-ships-hint"></p>
       </div>
     </section>
 

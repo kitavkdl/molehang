@@ -11,9 +11,13 @@ import { GAME_CONFIG, STORAGE_KEY } from './game/config.ts';
 import { CrewSession } from './game/crew-session.ts';
 import { Game, type GameSnapshot } from './game/game.ts';
 import { LocalGateway } from './game/local-gateway.ts';
+import type { MolehangGateway } from './game/gateway.ts';
 import { PART_KINDS, type PartKind, type PartTier } from './game/parts.ts';
 import { applyStatic, locale, setLocale, t } from './i18n/index.ts';
+import { Auth } from './net/auth.ts';
 import { createCrewChannel } from './net/crew-channel.ts';
+import { SupabaseGateway, listShips } from './net/supabase-gateway.ts';
+import { AccountPanel, selectShip, selectedShipId } from './ui/account.ts';
 import { World } from './scene/world.ts';
 import { PHASES, applyThemeVars, type Phase } from './style/palette.ts';
 import { GachaPanel } from './ui/gacha.ts';
@@ -57,9 +61,14 @@ function boot(): void {
   const storageKey = seat === null ? STORAGE_KEY : `${STORAGE_KEY}.${seat}`;
 
   const channel = createCrewChannel();
-  const gateway = new LocalGateway(GAME_CONFIG, undefined, undefined, storageKey);
-  const game = new Game(gateway, clock, GAME_CONFIG, channel);
+  const local = new LocalGateway(GAME_CONFIG, undefined, undefined, storageKey);
   const crew = new CrewSession(channel, seat);
+
+  // 로그인 상태는 부팅 중에 정해진다. 그 전까지는 게스트(로컬)로 시작해
+  // **네트워크가 죽어도 게임이 뜨게** 한다.
+  const auth = new Auth();
+  let gateway: MolehangGateway = local;
+  const game = new Game(gateway, clock, GAME_CONFIG, channel);
 
   const toasts = new Toasts();
   const tutorial = new Tutorial();
@@ -140,7 +149,32 @@ function boot(): void {
     paint(event.snapshot);
   }
 
+  const account = new AccountPanel(
+    auth,
+    () => local.snapshotForImport(),
+    // 로그인·배 전환은 게이트웨이 자체가 바뀌는 일이라, 상태를 이어 붙이는 대신
+    // 새로 부팅한다. 훨씬 단순하고 어긋날 여지가 없다.
+    () => globalThis.location.reload(),
+  );
+
   void (async () => {
+    // 로그인돼 있으면 클라우드 세이브로 갈아탄다. 실패하면 게스트로 계속 논다.
+    if (!params.has('guest')) {
+      try {
+        const state = await auth.restore();
+        if (state.kind === 'signed-in') {
+          const shipId = await resolveShipId();
+          if (shipId !== null) {
+            gateway = new SupabaseGateway(shipId, GAME_CONFIG);
+            game.useGateway(gateway);
+          }
+        }
+      } catch (err) {
+        console.warn('[molehang] 클라우드 세이브를 쓰지 못해 게스트로 시작합니다', err);
+      }
+    }
+    account.renderChip();
+
     let snap = await game.start();
 
     const scrap = params.get('scrap');
@@ -213,6 +247,18 @@ function boot(): void {
     tutorial: () => tutorial.start(),
     sampleLuminance: () => world.sampleLuminance(),
   };
+}
+
+/** 고른 배가 없거나 사라졌으면 첫 배로 돌아간다 */
+async function resolveShipId(): Promise<string | null> {
+  const ships = await listShips();
+  if (ships.length === 0) return null;
+
+  const saved = selectedShipId();
+  const found = ships.find((s) => s.id === saved);
+  const chosen = found ?? ships[0]!;
+  selectShip(chosen.id);
+  return chosen.id;
 }
 
 /** `engine*12,moss*4,cannon` 형식 */

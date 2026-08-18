@@ -84,7 +84,7 @@ export class Game {
   private readonly giftListeners = new Set<(g: CrewGift) => void>();
 
   constructor(
-    private readonly gateway: MolehangGateway,
+    private gateway: MolehangGateway,
     private readonly clock: Clock,
     private readonly config: GameConfig = GAME_CONFIG,
     private readonly channel: CrewChannel | null = null,
@@ -100,6 +100,12 @@ export class Game {
       titles: [],
       log: [],
     };
+  }
+
+  /** 부팅 도중 클라우드 세이브로 갈아탄다 (start() 전에만) */
+  useGateway(next: MolehangGateway): void {
+    if (this.ready) throw new Error('[molehang] 시작한 뒤에는 게이트웨이를 바꿀 수 없습니다');
+    this.gateway = next;
   }
 
   async start(): Promise<GameSnapshot> {

@@ -84,6 +84,23 @@ const KO: Dict = {
   'log.first': '첫 수거',
   'log.gathered': '{t} 모음',
 
+  // 계정
+  'auth.guest': '게스트',
+  'auth.account': '계정',
+  'auth.title': '계정',
+  'auth.badEmail': '이메일 주소를 다시 확인해 주세요',
+  'auth.badCode': '6자리 숫자를 입력해 주세요',
+  'auth.sending': '코드를 보내는 중…',
+  'auth.verifying': '확인 중…',
+  'auth.codeSent': '{email} 로 6자리 코드를 보냈어요. 메일함을 확인하세요.',
+  'auth.signedInAs': '{email} 로 로그인했어요',
+  'auth.loading': '불러오는 중…',
+  'auth.importAsk': '지금까지 게스트로 키우던 배를 계정으로 가져갈까요?',
+  'auth.importedName': '게스트에서 가져온 배',
+  'auth.newShipPrompt': '새 배 이름을 지어 주세요',
+  'auth.newShipDefault': '두 번째 배',
+  'auth.shipFailed': '배를 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
+
   // 튜토리얼
   'tutorial.next': '다음',
   'tutorial.start': '시작하기',
@@ -184,6 +201,22 @@ const EN: Dict = {
 
   'log.first': 'First collect',
   'log.gathered': 'gathered over {t}',
+
+  'auth.guest': 'Guest',
+  'auth.account': 'Account',
+  'auth.title': 'Account',
+  'auth.badEmail': 'Please check that email address',
+  'auth.badCode': 'Enter the 6 digits',
+  'auth.sending': 'Sending the code…',
+  'auth.verifying': 'Checking…',
+  'auth.codeSent': 'Sent a 6-digit code to {email}. Check your inbox.',
+  'auth.signedInAs': 'Signed in as {email}',
+  'auth.loading': 'Loading…',
+  'auth.importAsk': 'Bring the ship you built as a guest into this account?',
+  'auth.importedName': 'Ship from guest',
+  'auth.newShipPrompt': 'Name your new ship',
+  'auth.newShipDefault': 'Second ship',
+  'auth.shipFailed': "Couldn't create the ship. Try again in a moment.",
 
   'tutorial.next': 'Next',
   'tutorial.start': 'Start',
