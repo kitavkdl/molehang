@@ -22,6 +22,7 @@ import { ShadowBlob } from './shadow-blob.ts';
 import { Sky } from './sky.ts';
 import { Telescope } from './telescope.ts';
 import { Voyage } from './voyage.ts';
+import { Wake } from './wake.ts';
 import { phaseColorsFor, type ThemeId } from '../style/themes.ts';
 
 export interface LuminanceProbe {
@@ -49,6 +50,7 @@ export class World {
   private readonly arrange: Arrange;
   private readonly telescope: Telescope;
   private readonly voyage: Voyage;
+  private readonly wake: Wake;
   private readonly avatars: Avatars;
   private readonly state: SkyState = createSkyState();
   private readonly target = new Vector3();
@@ -93,6 +95,7 @@ export class World {
     this.motes = new Motes();
 
     this.voyage = new Voyage(canvas);
+    this.wake = new Wake();
 
     // 아바타는 배 로컬 그룹에 태운다 — 파도 흔들림과 요(yaw)를 배와 같이 탄다
     this.avatars = new Avatars();
@@ -108,6 +111,7 @@ export class World {
       this.birds.group,
       this.shadow.mesh,
       this.foam.group,
+      this.wake.group,
       this.boat.group,
       this.motes.group,
     );
@@ -195,6 +199,11 @@ export class World {
 
   get voyageActive(): boolean {
     return this.voyage.active;
+  }
+
+  /** 지금 물살을 가르는 속도 (유닛/초) — 항해 UI 의 속도계가 읽는다 */
+  get voyageSpeed(): number {
+    return this.voyage.speed;
   }
 
   /** 부품 효과(엔진·돛·외륜)에서 오는 항해 속도 보너스 */
@@ -309,6 +318,7 @@ export class World {
     this.avatars.update(this.elapsed);
     this.shadow.update(this.elapsed, seaX, seaZ);
     this.foam.update(this.state, this.elapsed, seaX, seaZ);
+    this.wake.update(this.state, this.elapsed, dt, seaX, seaZ, this.voyage.vx, this.voyage.vz);
     this.motes.update(this.elapsed, dt, this.boat.collectTarget);
 
     const framing = this.telescope.framing();
@@ -382,6 +392,7 @@ export class World {
     this.arrange.dispose();
     this.telescope.dispose();
     this.voyage.dispose();
+    this.wake.dispose();
     this.avatars.dispose();
     globalThis.removeEventListener('resize', this.resize);
     this.sky.dispose();

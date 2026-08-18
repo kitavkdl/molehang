@@ -1548,6 +1548,15 @@ body {
   text-align: center;
 }
 
+.arrange-bar__speed {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--mh-role-ink);
+  font-variant-numeric: tabular-nums;
+}
+
 .arrange-bar__hint {
   display: block;
   font-size: 13px;

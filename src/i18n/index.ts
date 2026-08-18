@@ -121,6 +121,7 @@ const KO: Dict = {
   'voyage.hint': 'WASD·방향키, 또는 화면을 끌어서 항해하세요 — 암초를 조심!',
   'voyage.done': '정박',
   'voyage.hit': '암초에 긁혔다!',
+  'voyage.speed': '{n}노트',
 
   // 방치 컨텐츠 — 돌아왔을 때 배에 생긴 일
   'idle.moss': '자리를 비운 사이 이끼가 앉았다 (+{n})',
@@ -289,6 +290,7 @@ const EN: Dict = {
   'voyage.hint': 'Sail with WASD/arrows, or drag the screen — mind the reefs!',
   'voyage.done': 'Drop anchor',
   'voyage.hit': 'Scraped a reef!',
+  'voyage.speed': '{n} kn',
 
   'idle.moss': 'Moss settled in while you were away (+{n})',
   'idle.gullNest': 'A gull built a nest',

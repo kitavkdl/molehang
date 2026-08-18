@@ -258,10 +258,13 @@ function boot(): void {
 
   // 항해와 배치는 겹치지 않는다 — 평소엔 버튼이 서로 가려 못 겹치지만,
   // 디버그 API(molehang.voyage)로 들어와도 상태가 꼬이지 않게 서로 접는다
-  const voyageUi = new VoyageUi((active) => {
-    if (active) arrangeUi.close();
-    world.setVoyageMode(active);
-  });
+  const voyageUi = new VoyageUi(
+    (active) => {
+      if (active) arrangeUi.close();
+      world.setVoyageMode(active);
+    },
+    () => world.voyageSpeed,
+  );
 
   // 암초 충돌 — 벌점은 없다. 대신 따개비가 붙는다(반드시 장착, 뽑기와 같은 유머)
   const BARNACLE_CHANCE = 0.45;

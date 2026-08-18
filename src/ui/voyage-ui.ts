@@ -5,18 +5,27 @@ import { t } from '../i18n/index.ts';
  *
  * 항해 중에는 수거·뽑기 버튼을 화면에서 치운다. 타륜을 잡은 손가락이 버튼을
  * 스치면 되돌릴 수 없는 사고가 난다(나온 부품은 반드시 장착이므로). §4.7 과 같은 이유.
+ *
+ * 속도계는 항해 중에만 rAF 로 돈다 — 씬 루프에 UI 를 끼워 넣지 않고,
+ * UI 가 씬의 속도 getter 를 읽어 간다.
  */
 export class VoyageUi {
   private readonly toggle = must('voyage-toggle');
   private readonly bar = must('voyage-bar');
   private readonly hint = must('voyage-hint');
+  private readonly speedEl = must('voyage-speed');
   private readonly doneBtn = must('voyage-done');
   private readonly dock = document.querySelector<HTMLElement>('.dock');
   private readonly stock = must('stock');
 
   private active = false;
+  private raf = 0;
+  private lastLabel = '';
 
-  constructor(private readonly onChange: (active: boolean) => void) {
+  constructor(
+    private readonly onChange: (active: boolean) => void,
+    private readonly speedOf: () => number = () => 0,
+  ) {
     this.toggle.addEventListener('click', () => this.set(!this.active));
     this.doneBtn.addEventListener('click', () => this.set(false));
   }
@@ -37,6 +46,7 @@ export class VoyageUi {
     this.toggle.textContent = t('voyage.toggle');
     this.doneBtn.textContent = t('voyage.done');
     this.hint.textContent = t('voyage.hint');
+    this.lastLabel = '';
   }
 
   private set(active: boolean): void {
@@ -50,7 +60,21 @@ export class VoyageUi {
     if (this.dock !== null) this.dock.hidden = active;
     this.stock.hidden = active;
     this.hint.textContent = t('voyage.hint');
+
+    cancelAnimationFrame(this.raf);
+    if (active) this.tick();
   }
+
+  private readonly tick = (): void => {
+    if (!this.active) return;
+    this.raf = requestAnimationFrame(this.tick);
+    // 유닛/초 → 노트 흉내. 숫자가 커야 "달린다"는 기분이 난다
+    const label = t('voyage.speed', { n: (this.speedOf() * 2.2).toFixed(1) });
+    if (label !== this.lastLabel) {
+      this.lastLabel = label;
+      this.speedEl.textContent = label;
+    }
+  };
 }
 
 function must(id: string): HTMLElement {
