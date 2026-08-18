@@ -86,6 +86,12 @@ export interface PartDef {
   zone: PartZone;
   /** 차지하는 자리. 0이면 자리를 안 먹는다 */
   slots: number;
+  /**
+   * 무게. 안 적으면 slots 와 같다. **항해에만** 영향을 준다 —
+   * 무거운 배는 최고속도·가속이 깎이고 물에 더 잠긴 채 달린다(§4.9).
+   * 생산·상한 등 경제 계산과는 완전히 무관하다.
+   */
+  heft?: number;
   /** 초당 고철 생산 기여 */
   production: number;
   /** 선체 자리를 늘려 주는 특수 부품 */
@@ -103,7 +109,7 @@ export interface PartDef {
 export const PART_INFO: Record<PartKind, PartDef> = {
   // ---------------------------------------------------------------- 작은 부품
   moss: {
-    kind: 'moss', tier: 'small', zone: 'side', slots: 1, production: 0, weight: 22,
+    kind: 'moss', tier: 'small', zone: 'side', slots: 1, production: 0, weight: 22, heft: 0,
     label: { ko: '이끼', en: 'Moss' },
     blurb: { ko: '아무것도 안 한다. 그냥 자란다.', en: 'Does nothing. Just grows.' },
   },
@@ -123,22 +129,22 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     blurb: { ko: '안에 뭐가 들었는지는 아무도 모른다.', en: 'Nobody knows what is inside.' },
   },
   rope: {
-    kind: 'rope', tier: 'small', zone: 'mast', slots: 1, production: 0.6, weight: 14,
+    kind: 'rope', tier: 'small', zone: 'mast', slots: 1, production: 0.6, weight: 14, heft: 0,
     label: { ko: '밧줄', en: 'Rigging' },
     blurb: { ko: '뭔가를 묶어 두면 덜 떨어진다.', en: 'Tied things fall off less often.' },
   },
   buoy: {
-    kind: 'buoy', tier: 'small', zone: 'side', slots: 1, production: 0.7, weight: 14,
+    kind: 'buoy', tier: 'small', zone: 'side', slots: 1, production: 0.7, weight: 14, heft: 0,
     label: { ko: '부표', en: 'Buoy' },
     blurb: { ko: '떠 있는 데 도움이 된다고 한다.', en: 'Allegedly helps with floating.' },
   },
   anchor: {
-    kind: 'anchor', tier: 'small', zone: 'side', slots: 1, production: 0.5, weight: 12,
+    kind: 'anchor', tier: 'small', zone: 'side', slots: 1, production: 0.5, weight: 12, heft: 3,
     label: { ko: '닻', en: 'Anchor' },
-    blurb: { ko: '내리면 멈춘다고 한다. 아직 안 내려 봤다.', en: 'Supposedly stops the ship. Untested.' },
+    blurb: { ko: '내리면 멈춘다고 한다. 아직 안 내려 봤다. 무겁다.', en: 'Supposedly stops the ship. Untested. Heavy.' },
   },
   duck: {
-    kind: 'duck', tier: 'small', zone: 'deck', slots: 1, production: 0.2, weight: 10,
+    kind: 'duck', tier: 'small', zone: 'deck', slots: 1, production: 0.2, weight: 10, heft: 0,
     effects: { collect: 0.03 },
     label: { ko: '고무 오리', en: 'Rubber duck' },
     blurb: { ko: '사기 진작 담당. 수거가 조금 즐거워진다.', en: 'Morale officer. Collecting feels nicer.' },
@@ -150,7 +156,7 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     blurb: { ko: '자는 동안에도 뭔가 걸려 있다.', en: 'Something is always caught in it.' },
   },
   weathervane: {
-    kind: 'weathervane', tier: 'small', zone: 'mast', slots: 1, production: 0.6, weight: 10,
+    kind: 'weathervane', tier: 'small', zone: 'mast', slots: 1, production: 0.6, weight: 10, heft: 0,
     effects: { speed: 0.4 },
     label: { ko: '풍향계', en: 'Weathervane' },
     blurb: { ko: '바람을 읽는다. 항해가 빨라진다.', en: 'Reads the wind. Sails faster.' },
@@ -169,13 +175,13 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     blurb: { ko: '연기가 난다. 뭘 태우는지는 모른다.', en: 'Smoke. Source unclear.' },
   },
   sail: {
-    kind: 'sail', tier: 'medium', zone: 'mast', slots: 2, production: 2.2, weight: 20,
+    kind: 'sail', tier: 'medium', zone: 'mast', slots: 2, production: 2.2, weight: 20, heft: 1,
     effects: { speed: 0.5 },
     label: { ko: '돛', en: 'Sail' },
     blurb: { ko: '바람을 받는다. 가끔 너무 많이.', en: 'Catches wind. Sometimes too much.' },
   },
   cannon: {
-    kind: 'cannon', tier: 'medium', zone: 'deck', slots: 2, production: 1.8, weight: 16,
+    kind: 'cannon', tier: 'medium', zone: 'deck', slots: 2, production: 1.8, weight: 16, heft: 3,
     label: { ko: '대포', en: 'Cannon' },
     blurb: { ko: '용도 미상. 일단 달았다.', en: 'Purpose unknown. Installed anyway.' },
   },
@@ -186,7 +192,7 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     blurb: { ko: '고철을 더 빨리 끌어올린다.', en: 'Hauls scrap up faster.' },
   },
   tank: {
-    kind: 'tank', tier: 'medium', zone: 'stern', slots: 2, production: 2.1, weight: 10,
+    kind: 'tank', tier: 'medium', zone: 'stern', slots: 2, production: 2.1, weight: 10, heft: 5,
     effects: { capacity: 0.15 },
     label: { ko: '물탱크', en: 'Water tank' },
     blurb: { ko: '무겁지만 쓸모는 있다.', en: 'Heavy, but useful.' },
@@ -204,7 +210,7 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     blurb: { ko: '첨벙거리며 배를 민다.', en: 'Splashes the ship forward.' },
   },
   magnet: {
-    kind: 'magnet', tier: 'medium', zone: 'deck', slots: 2, production: 1.9, weight: 8,
+    kind: 'magnet', tier: 'medium', zone: 'deck', slots: 2, production: 1.9, weight: 8, heft: 3,
     effects: { collect: 0.1 },
     label: { ko: '인양 자석', en: 'Salvage magnet' },
     blurb: { ko: '지나가던 고철이 알아서 붙는다.', en: 'Passing scrap sticks on its own.' },
@@ -212,37 +218,37 @@ export const PART_INFO: Record<PartKind, PartDef> = {
 
   // ---------------------------------------------------------------- 대형 부품
   bigEngine: {
-    kind: 'bigEngine', tier: 'large', zone: 'stern', slots: 3, production: 7.5, weight: 24,
+    kind: 'bigEngine', tier: 'large', zone: 'stern', slots: 3, production: 7.5, weight: 24, heft: 5,
     effects: { speed: 1.0 },
     label: { ko: '대형 엔진', en: 'Heavy engine' },
     blurb: { ko: '갑판이 흔들릴 정도로 돈다.', en: 'Shakes the whole deck.' },
   },
   turbine: {
-    kind: 'turbine', tier: 'large', zone: 'deck', slots: 3, production: 8.2, weight: 20,
+    kind: 'turbine', tier: 'large', zone: 'deck', slots: 3, production: 8.2, weight: 20, heft: 4,
     effects: { speed: 0.8 },
     label: { ko: '증기 터빈', en: 'Steam turbine' },
     blurb: { ko: '뜨겁고 비싸고 효율이 좋다.', en: 'Hot, costly, efficient.' },
   },
   greatSail: {
-    kind: 'greatSail', tier: 'large', zone: 'mast', slots: 3, production: 7.0, weight: 20,
+    kind: 'greatSail', tier: 'large', zone: 'mast', slots: 3, production: 7.0, weight: 20, heft: 1,
     effects: { speed: 1.2 },
     label: { ko: '대형 돛', en: 'Great sail' },
     blurb: { ko: '돛대가 버틸지는 모르겠다.', en: 'The mast may disagree.' },
   },
   turret: {
-    kind: 'turret', tier: 'large', zone: 'deck', slots: 3, production: 6.4, weight: 16,
+    kind: 'turret', tier: 'large', zone: 'deck', slots: 3, production: 6.4, weight: 16, heft: 6,
     label: { ko: '회전 포탑', en: 'Turret' },
     blurb: { ko: '누구와 싸우는지는 아직 모른다.', en: 'Enemy still unidentified.' },
   },
   beacon: {
-    kind: 'beacon', tier: 'large', zone: 'mast', slots: 3, production: 6.8, light: 4, weight: 14,
+    kind: 'beacon', tier: 'large', zone: 'mast', slots: 3, production: 6.8, light: 4, weight: 14, heft: 4,
     label: { ko: '등대탑', en: 'Beacon tower' },
     blurb: { ko: '밤바다를 멀리까지 밝힌다.', en: 'Lights the sea for miles.' },
   },
 
   // ------------------------------------------------- 밸런스 붕괴 (낮은 확률, 의도된 것)
   goldenDuck: {
-    kind: 'goldenDuck', tier: 'large', zone: 'deck', slots: 2, production: 0, weight: 2,
+    kind: 'goldenDuck', tier: 'large', zone: 'deck', slots: 2, production: 0, weight: 2, heft: 0,
     effects: { prodMult: 2 },
     label: { ko: '황금 오리', en: 'Golden duck' },
     blurb: {
@@ -251,13 +257,13 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     },
   },
   kraken: {
-    kind: 'kraken', tier: 'large', zone: 'side', slots: 2, production: 4.5, weight: 4,
+    kind: 'kraken', tier: 'large', zone: 'side', slots: 2, production: 4.5, weight: 4, heft: 0,
     effects: { collect: 0.25 },
     label: { ko: '아기 크라켄', en: 'Baby kraken' },
     blurb: { ko: '수거를 도와준다. 아직은 착하다.', en: 'Helps with collection. Friendly, for now.' },
   },
   clocktower: {
-    kind: 'clocktower', tier: 'large', zone: 'mast', slots: 3, production: 3.2, weight: 6,
+    kind: 'clocktower', tier: 'large', zone: 'mast', slots: 3, production: 3.2, weight: 6, heft: 5,
     effects: { capacity: 0.5 },
     label: { ko: '고장난 시계탑', en: 'Broken clocktower' },
     blurb: {
@@ -292,7 +298,7 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     },
   },
   ghost: {
-    kind: 'ghost', tier: 'medium', zone: 'deck', slots: 0, production: 0, light: 2, weight: 0,
+    kind: 'ghost', tier: 'medium', zone: 'deck', slots: 0, production: 0, light: 2, weight: 0, heft: 0,
     effects: { capacity: 0.2 },
     label: { ko: '유령 선원', en: 'Ghost sailor' },
     blurb: {
@@ -368,6 +374,19 @@ export function collectBoost(inv: Inventory): number {
   return Math.min(4, 1 + sum);
 }
 
+/** 부품 하나의 무게 — 안 적힌 부품은 자리 수가 곧 무게다 */
+export function partHeft(kind: PartKind): number {
+  return PART_INFO[kind].heft ?? PART_INFO[kind].slots;
+}
+
+/**
+ * 배 전체 무게 — **항해에만** 쓴다(§4.9). 최고속도·가속을 깎고 배를 물에 더 잠기게 한다.
+ * 따개비·둥지·유령은 무게 0 이다 — 암초 충돌·방치에 벌점을 만들지 않는 원칙 그대로.
+ */
+export function shipHeft(inv: Inventory): number {
+  return PART_KINDS.reduce((sum, k) => sum + inv[k] * partHeft(k), 0);
+}
+
 /** 항해모드 속도 보너스 (유닛/초, 최대 +4) */
 export function voyageSpeedBonus(inv: Inventory): number {
   let sum = 0;
@@ -381,14 +400,17 @@ export function voyageSpeedBonus(inv: Inventory): number {
 /** 효과를 한 줄로 — 뽑기 결과 화면과 기록 시트가 쓴다. 효과가 없으면 null */
 export function effectSummary(kind: PartKind, loc: Locale): string | null {
   const fx = PART_INFO[kind].effects;
-  if (fx === undefined) return null;
   const out: string[] = [];
   const pct = (v: number): string => `${Math.round(v * 100)}%`;
-  if (fx.prodMult !== undefined) out.push(loc === 'ko' ? `생산 ×${fx.prodMult}` : `Rate ×${fx.prodMult}`);
-  if (fx.capacity !== undefined) out.push(loc === 'ko' ? `상한 +${pct(fx.capacity)}` : `Cap +${pct(fx.capacity)}`);
-  if (fx.discount !== undefined) out.push(loc === 'ko' ? `뽑기 −${pct(fx.discount)}` : `Draws −${pct(fx.discount)}`);
-  if (fx.collect !== undefined) out.push(loc === 'ko' ? `수거 +${pct(fx.collect)}` : `Collect +${pct(fx.collect)}`);
-  if (fx.speed !== undefined) out.push(loc === 'ko' ? '항해 속도 ↑' : 'Sails faster');
+  if (fx !== undefined) {
+    if (fx.prodMult !== undefined) out.push(loc === 'ko' ? `생산 ×${fx.prodMult}` : `Rate ×${fx.prodMult}`);
+    if (fx.capacity !== undefined) out.push(loc === 'ko' ? `상한 +${pct(fx.capacity)}` : `Cap +${pct(fx.capacity)}`);
+    if (fx.discount !== undefined) out.push(loc === 'ko' ? `뽑기 −${pct(fx.discount)}` : `Draws −${pct(fx.discount)}`);
+    if (fx.collect !== undefined) out.push(loc === 'ko' ? `수거 +${pct(fx.collect)}` : `Collect +${pct(fx.collect)}`);
+    if (fx.speed !== undefined) out.push(loc === 'ko' ? '항해 속도 ↑' : 'Sails faster');
+  }
+  // 무게는 effects 가 아니라 별도 필드지만, 플레이어에게는 같은 "이 부품의 성질"이다
+  if (partHeft(kind) >= 3) out.push(loc === 'ko' ? '무거움 — 항해 ↓' : 'Heavy — sails slower');
   return out.length > 0 ? out.join(' · ') : null;
 }
 

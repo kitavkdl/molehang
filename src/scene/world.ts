@@ -211,6 +211,11 @@ export class World {
     this.voyage.speedBonus = bonus;
   }
 
+  /** 배 무게 (parts.ts shipHeft) — 항해 드래그와 흘수(물에 잠기는 깊이)에 쓴다 */
+  setShipHeft(heft: number): void {
+    this.voyage.heft = heft;
+  }
+
   /** 암초에 부딪혔다 — main 이 받아 따개비를 붙인다 */
   onReefHit(fn: () => void): () => void {
     return this.voyage.onHit(fn);

@@ -1,10 +1,20 @@
-import { CylinderGeometry, Group, Mesh, Object3D, Vector3, type BufferGeometry } from 'three';
+import {
+  CylinderGeometry,
+  Group,
+  Mesh,
+  Object3D,
+  OctahedronGeometry,
+  Vector3,
+  type BufferGeometry,
+} from 'three';
 import {
   PART_INFO,
   PART_KINDS,
   PART_ZONES,
   emptyInventory,
+  shipHeft,
   type Inventory,
+  type PartKind,
 } from '../game/parts.ts';
 import { ARRANGE_COLORS, BOAT_COLORS, type PaletteKey } from '../style/palette.ts';
 import { flat, flatUnlit, type FlatMaterial } from './flat-material.ts';
@@ -58,6 +68,25 @@ export class Boat {
 
   private bounceT = Infinity;
   private readonly crateWorld = new Vector3();
+
+  // --- 항해 상호작용 (§4.9) — 부품이 배의 "달리는 모습"을 바꾼다 ---
+  /** 배 무게 (parts.ts shipHeft). 무거울수록 물에 더 잠긴 채 달린다 */
+  private heft = 0;
+  /** 엔진 뒤의 불꽃 — 달릴 때만 보인다 */
+  private readonly flames: Array<{ group: Group; phase: number }> = [];
+  /** 연기가 피어오르는 자리 (굴뚝·터빈 꼭대기). 배치 드래그를 따라간다 */
+  private readonly smokeSources: Array<{ object: Object3D; topY: number }> = [];
+  /** 달릴 때 부풀어 오르는 돛들 */
+  private readonly billows: Array<{ object: Object3D; base: number }> = [];
+  /** 달릴 때 도는 외륜들 */
+  private readonly spinners: Object3D[] = [];
+  /** 연기 조각 풀 — 한 번 만들고 돌려 쓴다 */
+  private readonly puffs: Array<{ mesh: Mesh; t: number; active: boolean; drift: number }> = [];
+  private puffAcc = 0;
+  private readonly flameOuter: FlatMaterial;
+  private readonly flameInner: FlatMaterial;
+  private readonly smoke: FlatMaterial;
+  private readonly flameGeo: BufferGeometry;
 
   constructor(spec: HullSpec = HULL) {
     const { hull, deck, rail, keel } = buildHull(spec);
@@ -123,6 +152,26 @@ export class Boat {
     this.outlinePicked = flatUnlit(ARRANGE_COLORS.picked);
     this.materials.push(this.outlineIdle, this.outlinePicked);
 
+    // 항해 연출용 머티리얼 — 전부 팔레트 flat(). 불꽃은 해·산호, 연기는 크림
+    this.flameOuter = flat('coral');
+    this.flameInner = flat('sun');
+    this.smoke = flat('cream');
+    this.materials.push(this.flameOuter, this.flameInner, this.smoke);
+
+    // 불꽃은 단위 옥타헤드론 하나를 스케일로만 늘인다 — 지오메트리는 전 엔진이 공유
+    this.flameGeo = new OctahedronGeometry(1, 0);
+    this.geometries.push(this.flameGeo);
+
+    // 연기 조각 풀. 굴뚝이 없으면 안 쓰일 뿐이다 — 풀은 배(body)에 산다
+    const puffGeo = new OctahedronGeometry(0.11, 0);
+    this.geometries.push(puffGeo);
+    for (let i = 0; i < 14; i++) {
+      const mesh = new Mesh(puffGeo, this.smoke);
+      mesh.visible = false;
+      this.body.add(mesh);
+      this.puffs.push({ mesh, t: 0, active: false, drift: 0 });
+    }
+
     this.body.add(this.rig);
     this.body.rotation.y = BOAT_YAW;
     this.group.add(this.body);
@@ -151,6 +200,11 @@ export class Boat {
     this.outlines.clear();
     this.popping.length = 0;
     this.placements = placements;
+    this.flames.length = 0;
+    this.smokeSources.length = 0;
+    this.billows.length = 0;
+    this.spinners.length = 0;
+    this.heft = shipHeft(inventory);
 
     for (const zone of PART_ZONES) {
       let index = 0;
@@ -173,6 +227,7 @@ export class Boat {
           this.rig.add(object);
           this.mounted.push(object);
           this.parts.push({ object, key, zone });
+          this.mountVoyageFx(kind, object);
 
           // 이번에 늘어난 개수만 팝으로 등장시킨다.
           // 실제로 줄이는 건 자리를 다 잡은 뒤 — 0.01 배 상자로 물리를 재면 전부 뜬다
@@ -240,6 +295,63 @@ export class Boat {
     }
   }
 
+  /**
+   * 부품이 배의 "달리는 모습"에 남기는 흔적을 등록한다 (§4.9).
+   * 엔진은 불을 뿜고, 굴뚝·터빈은 연기를 올리고, 돛은 부풀고, 외륜은 돈다.
+   * 전부 항해 속도(drive)에 비례한다 — 정박하면 아무것도 안 보인다.
+   */
+  private mountVoyageFx(kind: PartKind, object: Group): void {
+    if (kind === 'engine' || kind === 'bigEngine') {
+      // 배기 파이프 **위로** 뿜는 토치 불꽃. 뒤로 뿜게 했더니 이 게임의 고정 카메라에서
+      // 엔진 몸체와 선미에 가려 안 보였다 — 위로 솟아야 어느 배치에서도 불이 보인다.
+      const pipes: Array<[number, number, number]> =
+        kind === 'bigEngine' ? [[0, 0.82, -0.2], [0, 0.82, 0.2]] : [[0, 0.58, -0.14]];
+      const size = kind === 'bigEngine' ? 1.4 : 1;
+      for (const [x, y, z] of pipes) {
+        const group = new Group();
+        group.position.set(x, y, z);
+        const outer = new Mesh(this.flameGeo, this.flameOuter);
+        outer.scale.set(0.13 * size, 0.34 * size, 0.13 * size);
+        const inner = new Mesh(this.flameGeo, this.flameInner);
+        inner.scale.set(0.08 * size, 0.24 * size, 0.08 * size);
+        inner.position.y = 0.1 * size;
+        group.add(outer, inner);
+        group.visible = false;
+        object.add(group);
+        this.flames.push({ group, phase: Math.random() * Math.PI * 2 });
+      }
+    } else if (kind === 'chimney') {
+      this.smokeSources.push({ object, topY: 0.42 });
+    } else if (kind === 'turbine') {
+      this.smokeSources.push({ object, topY: 0.95 });
+    } else if (kind === 'sail' || kind === 'greatSail') {
+      this.billows.push({ object, base: object.scale.z });
+    } else if (kind === 'paddle') {
+      // 바퀴 축은 요(yaw)가 돈 뒤의 로컬 x — YXZ 순서라야 축이 제자리에 남는다
+      object.rotation.order = 'YXZ';
+      this.spinners.push(object);
+    }
+  }
+
+  /** 연기 조각 하나를 무작위 굴뚝에서 띄운다 */
+  private spawnPuff(): void {
+    const source = this.smokeSources[Math.floor(Math.random() * this.smokeSources.length)];
+    if (source === undefined) return;
+    const slot = this.puffs.find((p) => !p.active);
+    if (slot === undefined) return;
+    const o = source.object;
+    slot.active = true;
+    slot.t = 0;
+    slot.drift = (Math.random() - 0.5) * 0.5;
+    slot.mesh.visible = true;
+    slot.mesh.position.set(
+      o.position.x + (Math.random() - 0.5) * 0.1,
+      o.position.y + source.topY * o.scale.y,
+      o.position.z + (Math.random() - 0.5) * 0.1,
+    );
+    slot.mesh.scale.setScalar(0.01);
+  }
+
   /** 배 로컬 좌표계의 기준 — 드래그 좌표 변환에 쓴다 */
   get localSpace(): Group {
     return this.body;
@@ -252,6 +364,9 @@ export class Boat {
    */
   update(elapsed: number, dt: number, seaX = 0, seaZ = 0, vx = 0, vz = 0): void {
     const { height, slopeX, slopeZ } = sampleWave(seaX, seaZ, elapsed);
+    const speed = Math.hypot(vx, vz);
+    /** 0(정박) ~ 1(전속) — 항해 연출은 전부 이 값에 비례한다 */
+    const drive = Math.min(1, speed / 3.4);
 
     let bounceScale = 1;
     let bounceLift = 0;
@@ -263,10 +378,54 @@ export class Boat {
       bounceLift = 0.14 * decay * Math.sin(t * 13);
     }
 
-    this.group.position.y = height + bounceLift;
+    // 무거운 배는 물에 더 잠긴다 (§4.9). 항해 중에는 이따금 더 가라앉으려는
+    // 느린 출렁임이 얹힌다 — 가라앉지는 않는다. 갑판은 언제나 물 위에 남는다.
+    const settle = Math.min(0.2, this.heft * 0.004);
+    const surge =
+      Math.min(0.12, this.heft * 0.0025) * drive * (0.5 + 0.5 * Math.sin(elapsed * 0.85));
+
+    this.group.position.y = height + bounceLift - settle - surge;
     this.group.rotation.z = -slopeX * 0.55 - vx * 0.028;
     this.group.rotation.x = slopeZ * 0.55 + vz * 0.02;
     this.body.scale.setScalar(bounceScale);
+
+    // --- 부품 항해 연출 — 정박(drive 0)이면 전부 잠잠하다 ---
+    for (const f of this.flames) {
+      const on = drive > 0.06;
+      f.group.visible = on;
+      if (on) {
+        const s = drive * (0.75 + 0.3 * Math.sin(elapsed * 21 + f.phase));
+        f.group.scale.setScalar(Math.max(0.01, s));
+      }
+    }
+
+    if (this.smokeSources.length > 0 && drive > 0.1) {
+      this.puffAcc += dt * (0.8 + 2.6 * drive) * Math.min(3, this.smokeSources.length);
+      while (this.puffAcc >= 1) {
+        this.puffAcc -= 1;
+        this.spawnPuff();
+      }
+    }
+    for (const p of this.puffs) {
+      if (!p.active) continue;
+      p.t += dt / 1.35;
+      if (p.t >= 1) {
+        p.active = false;
+        p.mesh.visible = false;
+        continue;
+      }
+      p.mesh.position.y += dt * 0.85;
+      p.mesh.position.x += dt * p.drift;
+      p.mesh.scale.setScalar(Math.max(0.01, Math.sin(Math.PI * p.t) * (0.7 + p.t)));
+    }
+
+    for (const s of this.spinners) s.rotation.x -= dt * drive * 6.5;
+
+    for (const b of this.billows) {
+      // 등장 팝이 도는 중에는 건드리지 않는다 — 팝이 세 축을 다 잡고 있다
+      if (this.popping.some((p) => p.object === b.object)) continue;
+      b.object.scale.z = b.base * (1 + drive * (0.14 + 0.04 * Math.sin(elapsed * 3.2)));
+    }
 
     // 새로 붙은 파츠 팝
     for (let i = this.popping.length - 1; i >= 0; i--) {

@@ -17,6 +17,7 @@ import {
   PART_INFO,
   PART_KINDS,
   removableKinds,
+  shipHeft,
   type PartKind,
   type PartTier,
 } from './game/parts.ts';
@@ -308,6 +309,7 @@ function boot(): void {
     world.setParts(snap.parts, false, snap.placements);
     world.setLight(snap.light);
     world.setVoyageSpeed(snap.voyageSpeed);
+    world.setShipHeft(shipHeft(snap.parts));
     // 갑판 위 선장들 — 첫 번째가 나, 뒤는 같이 접속해 있는 선원들
     world.setAvatars([avatarStore.current, ...snap.crew.map((m) => m.avatar)]);
     crew.update(profileFrom(snap));

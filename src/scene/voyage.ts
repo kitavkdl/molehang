@@ -173,6 +173,8 @@ export class Voyage {
   vz = 0;
   /** 부품 효과(엔진·돛·외륜)로 붙는 속도 보너스 */
   speedBonus = 0;
+  /** 배 무게 (parts.ts shipHeft) — 무거울수록 최고속도·가속이 깎인다 */
+  heft = 0;
 
   private props: Prop[] = [];
   private readonly splashes: Splash[] = [];
@@ -326,8 +328,11 @@ export class Voyage {
         iz /= mag;
       }
 
-      const max = BASE_SPEED + this.speedBonus;
-      const ease = Math.min(1, dt * 3.4);
+      // 무게 드래그 — 무거운 배는 최고속도가 깎이고(바닥 55%) 가속도 굼뜨다.
+      // 엔진(speedBonus)이 무게와 싸운다: 엔진 범벅의 무거운 배는 결국 다시 빨라진다
+      const drag = Math.max(0.55, 1 / (1 + this.heft * 0.012));
+      const max = (BASE_SPEED + this.speedBonus) * drag;
+      const ease = Math.min(1, dt * (1.4 + 2.0 * drag));
       this.vx += (ix * max - this.vx) * ease;
       this.vz += (iz * max - this.vz) * ease;
 
