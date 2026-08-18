@@ -99,6 +99,12 @@ const KO: Dict = {
   'arrange.moving': '{name} 옮기는 중',
   'arrange.done': '완료',
   'arrange.reset': '자동 정렬',
+  'arrange.settling': '허공엔 못 붙여요 — 닿는 자리까지 내려앉아요',
+
+  // 망원경
+  'scope.aria': '망원경 배율',
+  'scope.reset': '기본 배율로',
+  'scope.value': '{n}배',
 
   // 계정
   'auth.guest': '게스트',
@@ -242,6 +248,11 @@ const EN: Dict = {
   'arrange.moving': 'Moving {name}',
   'arrange.done': 'Done',
   'arrange.reset': 'Auto-arrange',
+  'arrange.settling': "Nothing floats — it drops until it's touching something",
+
+  'scope.aria': 'Telescope zoom',
+  'scope.reset': 'Back to 1x',
+  'scope.value': '{n}x',
 
   'auth.guest': 'Guest',
   'auth.account': 'Account',

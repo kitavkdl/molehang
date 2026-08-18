@@ -21,7 +21,8 @@ import {
 import type { ArrangeTarget } from './arrange.ts';
 import { sampleWave } from './ocean.ts';
 import { buildPartOutline, disposePartOutlines } from './part-outline.ts';
-import { buildPart, partKey } from './part-sockets.ts';
+import { reseat, type SeatedPart } from './part-support.ts';
+import { buildPart, kindFromKey, partKey } from './part-sockets.ts';
 
 export { BOAT_YAW, HULL } from './hull.ts';
 
@@ -173,19 +174,41 @@ export class Boat {
           this.mounted.push(object);
           this.parts.push({ object, key, zone });
 
-          // 이번에 늘어난 개수만 팝으로 등장시킨다
+          // 이번에 늘어난 개수만 팝으로 등장시킨다.
+          // 실제로 줄이는 건 자리를 다 잡은 뒤 — 0.01 배 상자로 물리를 재면 전부 뜬다
           if (animateNew && i >= this.previous[kind]) {
             this.popping.push({ object, t: 0, scale: object.scale.x });
-            object.scale.setScalar(0.01);
           }
         }
       }
     }
 
+    // 저장된 자리는 이 규칙이 생기기 전 좌표일 수 있다. 한 번 물리에 통과시킨다
+    reseat(this.seatedParts(), new Set(Object.keys(placements)));
+    for (const pop of this.popping) pop.object.scale.setScalar(0.01);
+
     this.previous = { ...inventory };
     this.signature = signature;
     // 배치 중에 부품이 다시 깔릴 수 있다(자리를 저장한 직후 등) — 표식 상태를 다시 입힌다
     this.applyOutlines();
+  }
+
+  /** 배치 물리가 다룰 수 있는 형태로 — position 을 제자리에서 고친다 */
+  private seatedParts(): SeatedPart[] {
+    const out: SeatedPart[] = [];
+    for (const target of this.parts) {
+      const kind = kindFromKey(target.key);
+      if (kind === null) continue;
+      out.push({
+        key: target.key,
+        kind,
+        zone: target.zone,
+        position: target.object.position,
+        scale: target.object.scale.x,
+        rotY: target.object.rotation.y,
+      });
+    }
+    return out;
   }
 
   /** 배치 모드에서 끌 수 있는 부품들 */

@@ -13,12 +13,12 @@ import { Boat } from './boat.ts';
 import { Clouds } from './clouds.ts';
 import { setLampLight, updateFlatLighting } from './flat-material.ts';
 import { Foam } from './foam.ts';
-import { framingFor } from './framing.ts';
 import { Islands } from './islands.ts';
 import { Lights } from './lights.ts';
 import { Ocean } from './ocean.ts';
 import { ShadowBlob } from './shadow-blob.ts';
 import { Sky } from './sky.ts';
+import { Telescope } from './telescope.ts';
 import { phaseColorsFor, type ThemeId } from '../style/themes.ts';
 
 export interface LuminanceProbe {
@@ -44,11 +44,13 @@ export class World {
   private readonly motes: Motes;
   private readonly sky: Sky;
   private readonly arrange: Arrange;
+  private readonly telescope: Telescope;
   private readonly state: SkyState = createSkyState();
   private readonly target = new Vector3();
 
   private arrangeDrop: (key: string, position: [number, number, number]) => void = () => {};
   private arrangePick: (key: string | null) => void = () => {};
+  private arrangeSettle: (settling: boolean) => void = () => {};
   private themeColors = phaseColorsFor('classic');
 
   private elapsed = 0;
@@ -109,11 +111,33 @@ export class World {
           this.boat.setPickedPart(key);
           this.arrangePick(key);
         },
+        onSettle: (settling) => this.arrangeSettle(settling),
       },
     );
 
+    // 망원경은 배치보다 **뒤에** 붙는다. 같은 캔버스의 pointerdown 을 둘이 듣는데,
+    // 부품을 집은 손가락으로 화면까지 끌리면 부품이 손에서 도망간다.
+    this.telescope = new Telescope(canvas, { blocked: () => this.arrange.isDragging });
+
     this.resize();
     globalThis.addEventListener('resize', this.resize);
+  }
+
+  /** 망원경 배율 (framing.ts 의 ZOOM 범위) */
+  get zoom(): number {
+    return this.telescope.zoom;
+  }
+
+  setZoom(zoom: number): void {
+    this.telescope.setZoom(zoom);
+  }
+
+  resetView(): void {
+    this.telescope.reset();
+  }
+
+  onZoomChange(fn: (zoom: number) => void): () => void {
+    return this.telescope.onZoomChange(fn);
   }
 
   setTimeSource(source: TimeOfDaySource): void {
@@ -157,12 +181,27 @@ export class World {
     });
   }
 
+  /**
+   * 부품이 배 로컬 어디에 앉아 있는지. 배치 물리를 자동 검증할 때 쓴다 —
+   * 화면 좌표만으로는 "닿아 있는가"를 확인할 수 없다.
+   */
+  partPlacements(): Array<{ key: string; position: [number, number, number] }> {
+    return this.boat.arrangeTargets.map((target) => ({
+      key: target.key,
+      position: [target.object.position.x, target.object.position.y, target.object.position.z],
+    }));
+  }
+
   onArrangeDrop(fn: (key: string, position: [number, number, number]) => void): void {
     this.arrangeDrop = fn;
   }
 
   onArrangePick(fn: (key: string | null) => void): void {
     this.arrangePick = fn;
+  }
+
+  onArrangeSettle(fn: (settling: boolean) => void): void {
+    this.arrangeSettle = fn;
   }
 
   /** 배에 달린 등불 총량 — 밤에 배가 보이는 정도를 결정한다 */
@@ -221,14 +260,33 @@ export class World {
     this.foam.update(this.state, this.elapsed);
     this.motes.update(this.elapsed, dt, this.boat.collectTarget);
 
-    // 아주 느린 카메라 흔들림 — 정적인 화면이 되지 않게
-    const sway = Math.sin(this.elapsed * 0.13) * 0.3;
-    const lift = Math.sin(this.elapsed * 0.19) * 0.09;
-    const framing = framingFor(this.camera.aspect);
-    this.camera.position.set(sway, framing.height + lift, framing.distance);
-    this.target.set(0, framing.targetY, 0);
+    const framing = this.telescope.framing();
+    const zoom = this.telescope.zoom;
+
+    // 아주 느린 카메라 흔들림 — 정적인 화면이 되지 않게.
+    // 확대할수록 줄인다. 화각이 좁아지면 같은 흔들림도 화면에서 몇 배로 커져서,
+    // 부품을 들여다보는 내내 화면이 출렁인다
+    const steady = Math.min(1, 1 / zoom);
+    const sway = Math.sin(this.elapsed * 0.13) * 0.3 * steady;
+    const lift = Math.sin(this.elapsed * 0.19) * 0.09 * steady;
+
+    // 확대하면 배의 파도 흔들림을 따라간다 — 망원경으로 배를 좇는 것처럼.
+    // 안 그러면 4배에서는 배가 화면 밖으로 들락거린다
+    const follow = Math.min(1, Math.max(0, zoom - 1)) * this.boat.group.position.y;
+
+    // 이동은 화면 축으로 준다. 카메라와 시점을 **같은 양** 옮기므로 시선은 안 돈다
+    const px = this.telescope.offsetX;
+    const py = this.telescope.offsetY;
+
+    this.camera.position.set(sway + px, framing.height + lift + py + follow, framing.distance);
+    this.target.set(px, framing.targetY + py + follow, 0);
     this.camera.lookAt(this.target);
     this.sky.mesh.position.copy(this.camera.position);
+
+    if (Math.abs(this.camera.fov - framing.fov) > 1e-3) {
+      this.camera.fov = framing.fov;
+      this.camera.updateProjectionMatrix();
+    }
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -238,7 +296,7 @@ export class World {
     const h = globalThis.innerHeight;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    this.camera.fov = framingFor(this.camera.aspect).fov;
+    this.camera.fov = this.telescope.framing().fov;
     this.camera.updateProjectionMatrix();
   };
 
@@ -271,6 +329,7 @@ export class World {
   dispose(): void {
     this.stop();
     this.arrange.dispose();
+    this.telescope.dispose();
     globalThis.removeEventListener('resize', this.resize);
     this.sky.dispose();
     this.ocean.dispose();

@@ -17,6 +17,8 @@ export class ArrangeUi {
   private readonly stock = must('stock');
 
   private active = false;
+  private picked: string | null = null;
+  private settling = false;
 
   constructor(handlers: { onChange: (active: boolean) => void; onReset: () => void }) {
     this.toggle.addEventListener('click', () => this.set(!this.active, handlers.onChange));
@@ -30,11 +32,29 @@ export class ArrangeUi {
 
   /** 집은 부품 이름을 힌트에 띄운다 */
   showPicked(key: string | null): void {
-    if (key === null) {
+    this.picked = key;
+    this.redrawHint();
+  }
+
+  /**
+   * 손가락이 가리킨 높이가 아니라 물리가 정한 높이로 내려앉는 중이라고 알려 준다.
+   * 이 안내가 없으면 "왜 내가 놓은 데 안 가지" 로 읽힌다 — 규칙이 있다는 걸 먼저 말해야 한다.
+   */
+  showSettling(settling: boolean): void {
+    this.settling = settling;
+    this.redrawHint();
+  }
+
+  private redrawHint(): void {
+    if (this.picked === null) {
       this.hint.textContent = t('arrange.hint');
       return;
     }
-    const kind = key.split('#')[0] as PartKind;
+    if (this.settling) {
+      this.hint.textContent = t('arrange.settling');
+      return;
+    }
+    const kind = this.picked.split('#')[0] as PartKind;
     if (PART_INFO[kind] === undefined) return;
     this.hint.textContent = t('arrange.moving', { name: partLabel(kind, locale()) });
   }
@@ -53,6 +73,8 @@ export class ArrangeUi {
     // 배치 중에는 되돌릴 수 없는 버튼(수거·뽑기)을 화면에서 치운다
     if (this.dock !== null) this.dock.hidden = active;
     this.stock.hidden = active;
+    this.picked = null;
+    this.settling = false;
     this.hint.textContent = t('arrange.hint');
     onChange(active);
   }

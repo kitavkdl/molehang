@@ -25,6 +25,7 @@ import { createCrewChannel } from './net/crew-channel.ts';
 import { SupabaseGateway, listShips } from './net/supabase-gateway.ts';
 import { AccountPanel, selectShip, selectedShipId } from './ui/account.ts';
 import { ArrangeUi } from './ui/arrange-ui.ts';
+import { TelescopeUi } from './ui/telescope-ui.ts';
 import { World } from './scene/world.ts';
 import { PHASES, applyThemeVars, type Phase } from './style/palette.ts';
 import { THEMES, THEME_IDS, isThemeId, themeName } from './style/themes.ts';
@@ -39,11 +40,13 @@ declare global {
     molehang?: {
       setHour(hour: number): void;
       setPhase(phase: Phase): void;
+      setZoom(zoom: number): void;
       setScrap(amount: number): Promise<void>;
       setPending(amount: number): Promise<void>;
       addParts(kinds: PartKind[]): Promise<void>;
       setPlacement(key: string, position: [number, number, number]): Promise<void>;
       partScreenPositions(): Array<{ key: string; x: number; y: number }>;
+      partPlacements(): Array<{ key: string; position: [number, number, number] }>;
       drawTheme(): Promise<void>;
       collect(): Promise<void>;
       draw(tier: PartTier): Promise<void>;
@@ -215,6 +218,7 @@ function boot(): void {
       setLocale(locale() === 'ko' ? 'en' : 'ko');
       hud.invalidate();
       arrangeUi.refreshLabels();
+      telescopeUi.render(world.zoom);
       account.renderChip();
       paint(game.snapshot());
       void sheet.refresh();
@@ -231,7 +235,16 @@ function boot(): void {
     onReset: () => void game.resetPlacements(),
   });
   world.onArrangePick((key) => arrangeUi.showPicked(key));
+  world.onArrangeSettle((settling) => arrangeUi.showSettling(settling));
   world.onArrangeDrop((key, position) => void game.savePlacement(key, position));
+
+  const telescopeUi = new TelescopeUi({
+    onZoom: (zoom) => world.setZoom(zoom),
+    onReset: () => world.resetView(),
+  });
+  // 휠·핀치로 바뀐 배율도 슬라이더에 되비친다
+  world.onZoomChange((zoom) => telescopeUi.render(zoom));
+  telescopeUi.render(world.zoom);
 
   function paint(snap: GameSnapshot): void {
     world.setTheme(snap.theme);
@@ -315,8 +328,16 @@ function boot(): void {
       snap = game.snapshot();
     }
 
+    // 디버그: 배율 강제 (`?zoom=0.4`) — 스크린샷이 망원경 양 끝을 찍을 수 있게
+    const zoom = params.get('zoom');
+    if (zoom !== null) {
+      const value = Number.parseFloat(zoom);
+      if (Number.isFinite(value)) world.setZoom(value);
+    }
+
     applyStatic();
     arrangeUi.refreshLabels();
+    telescopeUi.render(world.zoom);
     paint(snap);
     world.start();
     crew.start(params, profileFrom(snap));
@@ -351,6 +372,10 @@ function boot(): void {
   window.molehang = {
     setHour: (hour) => world.setTimeSource(new FixedTimeOfDay(hour)),
     setPhase: (phase) => world.setTimeSource(new FixedTimeOfDay(PHASE_ANCHOR_HOUR[phase])),
+    setZoom: (zoom) => {
+      world.setZoom(zoom);
+      telescopeUi.render(world.zoom);
+    },
     async setScrap(value) {
       await game.debugSetScrap(value);
       paint(game.snapshot());
@@ -368,6 +393,7 @@ function boot(): void {
       paint(game.snapshot());
     },
     partScreenPositions: () => world.partScreenPositions(),
+    partPlacements: () => world.partPlacements(),
     async drawTheme() {
       const result = await game.drawTheme();
       if (result.drawn !== null) world.setTheme(result.drawn);

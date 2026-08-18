@@ -1336,6 +1336,106 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------------------------------------------------------------- 망원경 */
+
+/*
+ * 화면 오른쪽 가장자리에 붙는 배율 슬라이더.
+ * 씬 위에 얹히는 유일한 상시 조작이라, 폭을 최소로 하고 나머지는 전부 비워 둔다.
+ */
+.scope {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.scope__value {
+  pointer-events: auto;
+  min-width: 46px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mh-role-surface) 88%, transparent);
+  color: var(--mh-role-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--mh-role-ink) 20%, transparent);
+}
+
+/*
+ * 세로 슬라이더는 가로 range 를 눕혀서 만든다.
+ * 세로 range(writing-mode)는 브라우저마다 트랙 굵기와 엄지 위치가 제각각이다.
+ *
+ * 눕힌 입력이 감싼 상자보다 길어서 grid 로는 가운데에 못 온다(트랙이 내용에 맞춰
+ * 늘어나 오른쪽으로 흘러 나간다). 절대배치로 중심을 직접 잡는다.
+ * 감싼 상자는 44px — 보이는 레일은 얇지만 손가락이 닿는 면은 규격대로. (CLAUDE.md §4)
+ */
+.scope__track {
+  position: relative;
+  pointer-events: auto;
+  width: 44px;
+  height: 196px;
+}
+
+.scope__range {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 176px;
+  height: 26px;
+  margin: 0;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  background: transparent;
+  cursor: pointer;
+}
+
+/* 레일 자체가 배경이다 — 씬 위에 큰 판을 얹지 않는다 */
+.scope__range::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mh-role-surface) 88%, transparent);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--mh-role-ink) 22%, transparent);
+}
+
+.scope__range::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mh-role-surface) 88%, transparent);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--mh-role-ink) 22%, transparent);
+}
+
+.scope__range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -7px;
+  border: 3px solid var(--mh-role-surface);
+  border-radius: 50%;
+  background: var(--mh-role-accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mh-role-ink) 34%, transparent);
+}
+
+.scope__range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--mh-role-surface);
+  border-radius: 50%;
+  background: var(--mh-role-accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mh-role-ink) 34%, transparent);
+}
+
 /* ---------------------------------------------------------------- 배치 모드 */
 
 .dock__row {

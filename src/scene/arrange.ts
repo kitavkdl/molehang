@@ -1,6 +1,12 @@
 import { Object3D, Plane, Raycaster, Vector2, Vector3, type Camera, type Group } from 'three';
 import type { PartZone } from '../game/parts.ts';
-import { ZONE_BOUNDS, clampToZone } from './part-sockets.ts';
+import {
+  collectSupports,
+  resolvePlacement,
+  type SupportPart,
+  type SupportSet,
+} from './part-support.ts';
+import { ZONE_BOUNDS, clampToZone, kindFromKey } from './part-sockets.ts';
 
 /**
  * 배치 모드 — 부품을 끌어서 옮긴다.
@@ -10,6 +16,9 @@ import { ZONE_BOUNDS, clampToZone } from './part-sockets.ts';
  *
  * 드래그는 화면 좌표 → 월드 평면 → 배 로컬 좌표 순으로 옮긴다.
  * 배는 파도에 흔들리고 요(yaw)도 돌아가 있어서, 로컬로 되돌리지 않으면 좌표가 어긋난다.
+ *
+ * 높이는 손가락이 정하지 않는다. **닿는 곳까지 내려앉고, 박히면 위로 얹힌다**(part-support.ts).
+ * 끄는 내내 그렇게 굴러서, 손을 뗐을 때 부품이 갑자기 뛰는 일이 없다.
  */
 export interface ArrangeTarget {
   object: Group;
@@ -24,6 +33,8 @@ export interface ArrangeHandlers {
   onDrop: (key: string, position: [number, number, number]) => void;
   /** 무엇을 집었는지 (UI 힌트용). null 이면 놓음 */
   onPick?: (key: string | null) => void;
+  /** 손가락이 가리킨 높이가 아니라 물리가 정한 높이에 놓이는 중인가 */
+  onSettle?: (settling: boolean) => void;
 }
 
 export class Arrange {
@@ -35,6 +46,9 @@ export class Arrange {
 
   private active = false;
   private dragging: ArrangeTarget | null = null;
+  /** 집는 순간 굳혀 두는 '짚을 수 있는 것들'. 끄는 동안 나머지 부품은 안 움직인다 */
+  private supports: SupportSet = { all: [], stack: [] };
+  private settling = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -58,6 +72,11 @@ export class Arrange {
 
   get isActive(): boolean {
     return this.active;
+  }
+
+  /** 지금 부품을 집고 있는가 — 망원경이 같은 손가락을 가져가지 않도록 */
+  get isDragging(): boolean {
+    return this.dragging !== null;
   }
 
   dispose(): void {
@@ -96,6 +115,8 @@ export class Arrange {
 
     e.preventDefault();
     this.dragging = found;
+    this.supports = collectSupports(this.otherParts(found));
+    this.settling = false;
     this.setupPlane(found);
 
     // 집은 지점과 부품 원점의 차이를 유지해야 튀지 않는다
@@ -146,20 +167,65 @@ export class Arrange {
 
     const local = this.body.worldToLocal(this.hit.clone()).add(this.grabOffset);
     const clamped = clampToZone(this.dragging.zone, local.x, local.y, local.z);
-    this.dragging.object.position.set(clamped[0], clamped[1], clamped[2]);
-    this.handlers.onMove?.(this.dragging.key, clamped);
+    const resolved = this.resolve(this.dragging, clamped);
+
+    this.dragging.object.position.set(resolved[0], resolved[1], resolved[2]);
+    this.handlers.onMove?.(this.dragging.key, resolved);
   };
+
+  /** 지금 끌고 있는 것 말고, 배에 붙어 있는 나머지 */
+  private *otherParts(except: ArrangeTarget): Generator<SupportPart> {
+    for (const target of this.targets()) {
+      if (target === except) continue;
+      const kind = kindFromKey(target.key);
+      if (kind === null) continue;
+      yield {
+        kind,
+        position: target.object.position,
+        scale: target.object.scale.x,
+        rotY: target.object.rotation.y,
+      };
+    }
+  }
+
+  /** 허공이면 내리고, 박혀 있으면 얹는다 */
+  private resolve(
+    target: ArrangeTarget,
+    at: [number, number, number],
+  ): [number, number, number] {
+    const kind = kindFromKey(target.key);
+    if (kind === null) return at;
+
+    const { position, moved } = resolvePlacement(
+      kind,
+      target.zone,
+      at,
+      target.object.scale.x,
+      target.object.rotation.y,
+      this.supports,
+    );
+    if (moved !== this.settling) {
+      this.settling = moved;
+      this.handlers.onSettle?.(moved);
+    }
+    return position;
+  }
 
   private readonly onUp = (): void => {
     if (this.dragging === null) return;
     const { key, object } = this.dragging;
     this.dragging = null;
+    this.settling = false;
+    this.handlers.onSettle?.(false);
+    // 끄는 내내 물리를 통과한 좌표라 여기서 더 손볼 것이 없다
     this.handlers.onDrop(key, [object.position.x, object.position.y, object.position.z]);
     this.handlers.onPick?.(null);
   };
 
   private release(): void {
     this.dragging = null;
+    this.settling = false;
+    this.handlers.onSettle?.(false);
     this.handlers.onPick?.(null);
   }
 }

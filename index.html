@@ -52,6 +52,24 @@
         </div>
       </div>
 
+      <!-- 망원경: 배율 슬라이더 -->
+      <div class="scope" id="scope">
+        <button class="scope__value" id="scope-reset" type="button" title="기본 배율">1.0×</button>
+        <div class="scope__track">
+          <input
+            class="scope__range"
+            id="scope-range"
+            type="range"
+            min="0"
+            max="1000"
+            step="1"
+            value="500"
+            aria-label="망원경 배율"
+            data-i18n-aria="scope.aria"
+          />
+        </div>
+      </div>
+
       <div class="toasts" id="toasts" aria-live="polite"></div>
 
       <!-- 배치 모드 안내 -->

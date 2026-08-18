@@ -241,6 +241,78 @@ async function main() {
       await context.close();
     }
 
+    // --- 망원경 (배율 양 끝 + 확대한 채 끌기) ---
+    for (const scope of [
+      { name: 'scope-wide', zoom: '0.4', label: '망망' },
+      { name: 'scope-close', zoom: '4', label: '망원' },
+    ]) {
+      const { page, errors, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url(`phase=day&res=300&zoom=${scope.zoom}&parts=sail,lantern*2,barrel,cannon`),
+      );
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await page.screenshot({ path: path.join(OUT, `${scope.name}.png`) });
+      check(scope.name, scope.label, probe, errors);
+      await context.close();
+    }
+    {
+      // 확대한 상태에서 화면을 끌어 옮긴다 — 회전이 아니라 평행이동이어야 한다
+      const { page, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=dusk&res=300&zoom=2.6&parts=chimney*2,lantern*2,sail'),
+      );
+      await page.mouse.move(MOBILE.width / 2, MOBILE.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(MOBILE.width / 2 + 70, MOBILE.height / 2 + 90, { steps: 10 });
+      await page.mouse.up();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, 'scope-pan.png') });
+      await context.close();
+    }
+
+/*
+     * --- 배치 물리 ---
+     * 부품을 허공으로 끌어올려도 닿는 자리에서 멈춘다.
+     * 그림만으로는 "정말 닿았는지" 알 수 없으므로 좌표로도 확인한다.
+     */
+    {
+      const { page, errors, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=day&zoom=1.5&parts=moss*2,barrel*2,lantern'),
+      );
+      await page.click('#arrange-toggle');
+      await page.waitForTimeout(400);
+
+      const spots = await page.evaluate(() => window.molehang.partScreenPositions());
+      const moss = spots.find((s) => s.key === 'moss#0');
+      if (moss !== undefined) {
+        await page.mouse.move(moss.x, moss.y);
+        await page.mouse.down();
+        // 손가락은 하늘로 간다. 부품은 선체를 벗어나지 못해야 한다
+        await page.mouse.move(moss.x, 110, { steps: 14 });
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: path.join(OUT, 'arrange-settle.png') });
+        await page.mouse.up();
+        await page.waitForTimeout(400);
+
+        const seated = await page.evaluate(
+          () => window.molehang.partPlacements().find((p) => p.key === 'moss#0')?.position ?? null,
+        );
+        // 갑판선(0.44~0.66)에서 한 뼘 안쪽이면 붙어 있는 것. 하늘로 갔으면 훨씬 크다
+        if (seated === null || seated[1] > 1.2) {
+          errors.push(`배치 물리: moss#0 이 허공에 남았다 (${JSON.stringify(seated)})`);
+        } else {
+          console.log(`     · 배치 물리 OK — moss#0 y=${seated[1].toFixed(2)} (선체에 붙음)`);
+        }
+      }
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      check('arrange-settle', '물리', probe, errors);
+      await context.close();
+    }
+
     // --- 계정 ---
     {
       const { page, context } = await openScene(browser, MOBILE_CTX, url('phase=dusk&res=200'));

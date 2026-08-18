@@ -132,6 +132,14 @@ export interface ZoneBounds {
   z: [number, number];
   /** 좌우 어느 한쪽 면에 붙는 구역(현측)은 가까운 쪽으로 스냅한다 */
   snapSides?: boolean;
+  /**
+   * 부품이 **무언가 위에 얹히는** 구역인가.
+   *
+   * 갑판·선미의 물건은 바닥이나 다른 물건 위에 놓인다 — 겹치면 위로 올려 쌓는다.
+   * 현측·돛대는 옆으로 매달리는 자리라, 선체나 돛대에 파묻히는 게 정상이다.
+   * 여기서 위로 밀어내면 부품이 배에서 떨어져 나간다.
+   */
+  restsOnTop: boolean;
   /** 드래그 평면의 법선 (배 로컬 기준) */
   plane: 'horizontal' | 'sideways' | 'vertical';
 }
@@ -147,6 +155,7 @@ export const ZONE_BOUNDS: Record<PartZone, ZoneBounds> = {
     x: [-HALF_B * 0.62, HALF_B * 0.62],
     y: [DECK_Y + 0.28, DECK_Y + 2.6],
     z: [-HALF_L * 0.62, HALF_L * 0.6],
+    restsOnTop: true,
     plane: 'horizontal',
   },
   side: {
@@ -154,18 +163,21 @@ export const ZONE_BOUNDS: Record<PartZone, ZoneBounds> = {
     y: [DECK_Y - 0.72, DECK_Y + 1.2],
     z: [-HALF_L * 0.62, HALF_L * 0.58],
     snapSides: true,
+    restsOnTop: false,
     plane: 'sideways',
   },
   mast: {
     x: [-0.12, 0.12],
     y: [DECK_Y + 1.6, DECK_Y + 9.5],
     z: [0.2, 0.7],
+    restsOnTop: false,
     plane: 'vertical',
   },
   stern: {
     x: [-HALF_B * 0.55, HALF_B * 0.55],
     y: [DECK_Y - 0.15, DECK_Y + 2.4],
     z: [-HALF_L + 0.2, -HALF_L + 1.4],
+    restsOnTop: true,
     plane: 'horizontal',
   },
 };
