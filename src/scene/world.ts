@@ -19,6 +19,7 @@ import { Ocean } from './ocean.ts';
 import { ShadowBlob } from './shadow-blob.ts';
 import { Sky } from './sky.ts';
 import { Telescope } from './telescope.ts';
+import { Voyage } from './voyage.ts';
 import { phaseColorsFor, type ThemeId } from '../style/themes.ts';
 
 export interface LuminanceProbe {
@@ -45,6 +46,7 @@ export class World {
   private readonly sky: Sky;
   private readonly arrange: Arrange;
   private readonly telescope: Telescope;
+  private readonly voyage: Voyage;
   private readonly state: SkyState = createSkyState();
   private readonly target = new Vector3();
 
@@ -87,11 +89,14 @@ export class World {
     this.foam = new Foam();
     this.motes = new Motes();
 
+    this.voyage = new Voyage(canvas);
+
     this.scene.add(
       this.sky.mesh,
       this.lights.group,
       this.islands.group,
       this.ocean.group,
+      this.voyage.group,
       this.clouds.group,
       this.birds.group,
       this.shadow.mesh,
@@ -117,7 +122,10 @@ export class World {
 
     // 망원경은 배치보다 **뒤에** 붙는다. 같은 캔버스의 pointerdown 을 둘이 듣는데,
     // 부품을 집은 손가락으로 화면까지 끌리면 부품이 손에서 도망간다.
-    this.telescope = new Telescope(canvas, { blocked: () => this.arrange.isDragging });
+    // 항해 중에는 끌기가 타륜이다 — 망원경 이동은 양보한다.
+    this.telescope = new Telescope(canvas, {
+      blocked: () => this.arrange.isDragging || this.voyage.active,
+    });
 
     this.resize();
     globalThis.addEventListener('resize', this.resize);
@@ -161,6 +169,30 @@ export class World {
   setArrangeMode(active: boolean): void {
     this.arrange.setActive(active);
     this.boat.setArrangeMode(active);
+  }
+
+  /**
+   * 항해모드 켜기/끄기.
+   * 켤 때 망원경을 기본 구도로 되돌린다 — 4배로 부품을 들여다보는 채로
+   * 배가 달리기 시작하면 무슨 일이 나는지 알 수 없는 화면이 된다.
+   */
+  setVoyageMode(active: boolean): void {
+    if (active) this.telescope.reset();
+    this.voyage.setActive(active);
+  }
+
+  get voyageActive(): boolean {
+    return this.voyage.active;
+  }
+
+  /** 부품 효과(엔진·돛·외륜)에서 오는 항해 속도 보너스 */
+  setVoyageSpeed(bonus: number): void {
+    this.voyage.speedBonus = bonus;
+  }
+
+  /** 암초에 부딪혔다 — main 이 받아 따개비를 붙인다 */
+  onReefHit(fn: () => void): () => void {
+    return this.voyage.onHit(fn);
   }
 
   /**
@@ -248,16 +280,22 @@ export class World {
 
     evaluateSky(this.timeSource.hourOfDay(), this.state, this.themeColors);
 
+    // 항해 — 배는 원점에 있고 바다가 흐른다. 모두가 같은 바다 좌표를 봐야
+    // 배·그림자·포말이 같은 물결을 탄다.
+    this.voyage.update(dt, this.elapsed);
+    const seaX = this.voyage.seaX;
+    const seaZ = this.voyage.seaZ;
+
     this.sky.update(this.state, this.elapsed);
     this.lights.update(this.state);
     updateFlatLighting(this.state);
-    this.ocean.update(this.state, this.elapsed);
+    this.ocean.update(this.state, this.elapsed, seaX, seaZ);
     this.islands.update(this.state);
     this.clouds.update(this.state, dt);
     this.birds.update(this.state, this.elapsed);
-    this.boat.update(this.elapsed, dt);
-    this.shadow.update(this.elapsed);
-    this.foam.update(this.state, this.elapsed);
+    this.boat.update(this.elapsed, dt, seaX, seaZ, this.voyage.vx, this.voyage.vz);
+    this.shadow.update(this.elapsed, seaX, seaZ);
+    this.foam.update(this.state, this.elapsed, seaX, seaZ);
     this.motes.update(this.elapsed, dt, this.boat.collectTarget);
 
     const framing = this.telescope.framing();
@@ -330,6 +368,7 @@ export class World {
     this.stop();
     this.arrange.dispose();
     this.telescope.dispose();
+    this.voyage.dispose();
     globalThis.removeEventListener('resize', this.resize);
     this.sky.dispose();
     this.ocean.dispose();

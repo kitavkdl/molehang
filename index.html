@@ -81,6 +81,14 @@
         </div>
       </div>
 
+      <!-- 항해모드 안내 -->
+      <div class="arrange-bar" id="voyage-bar" hidden>
+        <span class="arrange-bar__hint" id="voyage-hint">WASD나 화면을 끌어서 항해하세요</span>
+        <div class="arrange-bar__actions">
+          <button class="arrange-bar__done" id="voyage-done" type="button">정박</button>
+        </div>
+      </div>
+
       <!-- 하단: 지갑 + 뽑기 + 수거 -->
       <footer class="dock">
         <div class="dock__row">
@@ -89,6 +97,7 @@
             <span class="wallet__amount" id="wallet-amount">0</span>
             <span class="wallet__label" id="wallet-label">고철</span>
           </div>
+          <button class="chip chip--arrange" id="voyage-toggle" type="button">항해</button>
           <button class="chip chip--arrange" id="arrange-toggle" type="button">배치</button>
         </div>
 

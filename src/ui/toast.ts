@@ -82,6 +82,14 @@ export class Toasts {
     this.push(el, 2000);
   }
 
+  /** 방치 컨텐츠처럼 "그 사이 배에 생긴 일"을 담담하게 알린다 */
+  note(message: string): void {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = message;
+    this.push(el, 3600);
+  }
+
   private push(el: HTMLElement, ms: number): void {
     this.root.append(el);
     requestAnimationFrame(() => el.classList.add('is-in'));

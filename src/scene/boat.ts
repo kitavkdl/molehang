@@ -245,9 +245,13 @@ export class Boat {
     return this.body;
   }
 
-  /** 파도 위에서 흔들린다 — 바다 셰이더와 같은 파형 함수를 공유 */
-  update(elapsed: number, dt: number): void {
-    const { height, slopeX, slopeZ } = sampleWave(0, 0, elapsed);
+  /**
+   * 파도 위에서 흔들린다 — 바다 셰이더와 같은 파형 함수를 공유.
+   * 항해모드에서는 배가 바다 위 (seaX, seaZ) 에 "있다" — 그 자리의 파도를 탄다.
+   * vx/vz 는 항해 속도 — 움직이는 쪽으로 살짝 기울여 몰고 있다는 감각을 준다.
+   */
+  update(elapsed: number, dt: number, seaX = 0, seaZ = 0, vx = 0, vz = 0): void {
+    const { height, slopeX, slopeZ } = sampleWave(seaX, seaZ, elapsed);
 
     let bounceScale = 1;
     let bounceLift = 0;
@@ -260,8 +264,8 @@ export class Boat {
     }
 
     this.group.position.y = height + bounceLift;
-    this.group.rotation.z = -slopeX * 0.55;
-    this.group.rotation.x = slopeZ * 0.55;
+    this.group.rotation.z = -slopeX * 0.55 - vx * 0.028;
+    this.group.rotation.x = slopeZ * 0.55 + vz * 0.02;
     this.body.scale.setScalar(bounceScale);
 
     // 새로 붙은 파츠 팝

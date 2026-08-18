@@ -26,6 +26,7 @@ import { SupabaseGateway, listShips } from './net/supabase-gateway.ts';
 import { AccountPanel, selectShip, selectedShipId } from './ui/account.ts';
 import { ArrangeUi } from './ui/arrange-ui.ts';
 import { TelescopeUi } from './ui/telescope-ui.ts';
+import { VoyageUi } from './ui/voyage-ui.ts';
 import { World } from './scene/world.ts';
 import { PHASES, applyThemeVars, type Phase } from './style/palette.ts';
 import { THEMES, THEME_IDS, isThemeId, themeName } from './style/themes.ts';
@@ -51,6 +52,7 @@ declare global {
       collect(): Promise<void>;
       draw(tier: PartTier): Promise<void>;
       crewMultiplier(): number;
+      voyage(active: boolean): void;
       reset(): Promise<void>;
       tutorial(): void;
       sampleLuminance(): { mean: number; p10: number } | null;
@@ -218,6 +220,7 @@ function boot(): void {
       setLocale(locale() === 'ko' ? 'en' : 'ko');
       hud.invalidate();
       arrangeUi.refreshLabels();
+      voyageUi.refreshLabels();
       telescopeUi.render(world.zoom);
       account.renderChip();
       paint(game.snapshot());
@@ -238,6 +241,28 @@ function boot(): void {
   world.onArrangeSettle((settling) => arrangeUi.showSettling(settling));
   world.onArrangeDrop((key, position) => void game.savePlacement(key, position));
 
+  const voyageUi = new VoyageUi((active) => world.setVoyageMode(active));
+
+  // 암초 충돌 — 벌점은 없다. 대신 따개비가 붙는다(반드시 장착, 뽑기와 같은 유머)
+  const BARNACLE_CHANCE = 0.45;
+  const BARNACLE_MAX = 24;
+  world.onReefHit(() => {
+    toasts.warn(t('voyage.hit'));
+    if (Math.random() >= BARNACLE_CHANCE) return;
+    if (game.snapshot().parts.barnacle >= BARNACLE_MAX) return;
+    void (async () => {
+      const outcome = await game.install('barnacle', null);
+      if (outcome === null) return;
+      const snap = game.snapshot();
+      paint(snap);
+      world.setParts(snap.parts, true);
+      toasts.installed('barnacle', null);
+      const unlocked = game.titleById(outcome.newTitleId);
+      if (unlocked !== null) globalThis.setTimeout(() => toasts.title(unlocked), 420);
+      void sheet.refresh();
+    })();
+  });
+
   const telescopeUi = new TelescopeUi({
     onZoom: (zoom) => world.setZoom(zoom),
     onReset: () => world.resetView(),
@@ -252,6 +277,7 @@ function boot(): void {
     world.setFill(snap.fill);
     world.setParts(snap.parts, false, snap.placements);
     world.setLight(snap.light);
+    world.setVoyageSpeed(snap.voyageSpeed);
     crew.update(profileFrom(snap));
   }
 
@@ -295,6 +321,13 @@ function boot(): void {
     }
     account.renderChip();
 
+    // 디버그: 방치 시간 강제 (`?away=26` — 시간 단위). 방치 컨텐츠를 바로 본다
+    const away = params.get('away');
+    if (away !== null) {
+      const hours = Number.parseFloat(away);
+      if (Number.isFinite(hours) && hours > 0) game.debugOfflineMs = hours * 3600_000;
+    }
+
     let snap = await game.start();
 
     const scrap = params.get('scrap');
@@ -337,10 +370,31 @@ function boot(): void {
 
     applyStatic();
     arrangeUi.refreshLabels();
+    voyageUi.refreshLabels();
     telescopeUi.render(world.zoom);
     paint(snap);
     world.start();
     crew.start(params, profileFrom(snap));
+
+    // 디버그: 항해모드로 시작 (`?voyage=1`) — 스크린샷용
+    if (params.has('voyage')) voyageUi.open();
+
+    // 방치 컨텐츠 — 비운 사이 배에 생긴 일을 하나씩 알린다
+    game.lastIdleGrowth.forEach((growth, i) => {
+      globalThis.setTimeout(
+        () => toasts.note(t(`idle.${growth.kind}`, { n: growth.count })),
+        800 + i * 900,
+      );
+    });
+    game.lastIdleTitleIds.forEach((id, i) => {
+      const title = game.titleById(id);
+      if (title !== null) {
+        globalThis.setTimeout(
+          () => toasts.title(title),
+          800 + (game.lastIdleGrowth.length + i) * 900,
+        );
+      }
+    });
 
     globalThis.setInterval(() => paint(game.snapshot()), 250);
 
@@ -404,6 +458,10 @@ function boot(): void {
       await gacha.open(tier, game.snapshot());
     },
     crewMultiplier: () => game.snapshot().crewMultiplier,
+    voyage: (active) => {
+      if (active) voyageUi.open();
+      else voyageUi.close();
+    },
     async reset() {
       clearPendingDraw();
       paint(await game.reset());

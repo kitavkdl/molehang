@@ -10,7 +10,7 @@ import {
 import { PART_INFO, type PartKind, type PartZone } from '../game/parts.ts';
 import { PART_COLORS } from '../style/palette.ts';
 import { flat, type FlatMaterial } from './flat-material.ts';
-import { HULL, boxGeometry, hullHalfWidthAt, sailGeometry } from './hull.ts';
+import { HULL, boxGeometry, flagGeometry, hullHalfWidthAt, sailGeometry } from './hull.ts';
 
 /**
  * 파츠 지오메트리 + **구역 기반 배치**.
@@ -286,6 +286,31 @@ function build(kind: PartKind): PartPiece[] {
         { geo: keep(new OctahedronGeometry(0.22, 0)), color: 'clothTrim' },
         { geo: keep(new CylinderGeometry(0.04, 0.04, 0.3, 5)), color: 'metal', y: 0.2 },
       ];
+    case 'anchor':
+      return [
+        { geo: keep(new CylinderGeometry(0.035, 0.035, 0.46, 5)), color: 'metal' },
+        { geo: keep(boxGeometry(0.3, 0.05, 0.05)), color: 'metalTrim', y: 0.16 },
+        { geo: keep(new OctahedronGeometry(0.09, 0)), color: 'metal', x: 0.14, y: -0.2 },
+        { geo: keep(new OctahedronGeometry(0.09, 0)), color: 'metal', x: -0.14, y: -0.2 },
+      ];
+    case 'duck':
+      return [
+        { geo: keep(new OctahedronGeometry(0.2, 0)), color: 'glow' },
+        { geo: keep(new OctahedronGeometry(0.12, 0)), color: 'glow', y: 0.19, z: 0.12 },
+        { geo: keep(boxGeometry(0.08, 0.05, 0.12)), color: 'clothTrim', y: 0.17, z: 0.26 },
+      ];
+    case 'net':
+      return [
+        { geo: keep(boxGeometry(0.05, 0.44, 0.44)), color: 'wood' },
+        { geo: keep(new CylinderGeometry(0.02, 0.02, 0.6, 4)), color: 'cloth', x: 0.04, rotZ: 0.7 },
+        { geo: keep(new CylinderGeometry(0.02, 0.02, 0.6, 4)), color: 'cloth', x: 0.04, rotZ: -0.7 },
+      ];
+    case 'weathervane':
+      return [
+        { geo: keep(new CylinderGeometry(0.022, 0.022, 0.55, 5)), color: 'metal' },
+        { geo: keep(boxGeometry(0.34, 0.035, 0.035)), color: 'metalTrim', y: 0.24 },
+        { geo: keep(flagGeometry(0.3)), color: 'flag', y: 0.28 },
+      ];
 
     case 'engine':
       return [
@@ -320,6 +345,26 @@ function build(kind: PartKind): PartPiece[] {
         { geo: keep(new CylinderGeometry(0.26, 0.26, 0.55, 8)), color: 'metal' },
         { geo: keep(new CylinderGeometry(0.28, 0.28, 0.08, 8)), color: 'metalTrim', y: 0.26 },
       ];
+    case 'wheelhouse':
+      return [
+        { geo: keep(boxGeometry(0.5, 0.42, 0.44)), color: 'frame' },
+        { geo: keep(boxGeometry(0.4, 0.16, 0.06)), color: 'glass', y: 0.06, z: 0.22 },
+        { geo: keep(boxGeometry(0.58, 0.08, 0.52)), color: 'clothTrim', y: 0.26 },
+      ];
+    case 'paddle':
+      return [
+        { geo: keep(new CylinderGeometry(0.36, 0.36, 0.1, 8)), color: 'wood', rotZ: Math.PI / 2 },
+        { geo: keep(new CylinderGeometry(0.09, 0.09, 0.18, 6)), color: 'metalTrim', rotZ: Math.PI / 2 },
+        { geo: keep(boxGeometry(0.06, 0.78, 0.14)), color: 'wood' },
+        { geo: keep(boxGeometry(0.06, 0.78, 0.14)), color: 'wood', rotZ: Math.PI / 2 },
+      ];
+    case 'magnet':
+      return [
+        { geo: keep(new CylinderGeometry(0.05, 0.07, 0.8, 6)), color: 'metal', y: 0.4 },
+        { geo: keep(new CylinderGeometry(0.045, 0.045, 0.7, 5)), color: 'metalTrim', y: 0.76, z: 0.26, rotZ: 1.25 },
+        { geo: keep(boxGeometry(0.24, 0.26, 0.15)), color: 'clothTrim', y: 0.3, z: 0.52 },
+        { geo: keep(boxGeometry(0.24, 0.07, 0.15)), color: 'glass', y: 0.13, z: 0.52 },
+      ];
 
     case 'bigEngine':
       return [
@@ -353,11 +398,52 @@ function build(kind: PartKind): PartPiece[] {
         { geo: keep(boxGeometry(0.34, 0.36, 0.34)), color: 'glow', y: 1.0 },
         { geo: keep(new CylinderGeometry(0.02, 0.22, 0.3, 6)), color: 'metal', y: 1.3 },
       ];
+    case 'goldenDuck':
+      return [
+        { geo: keep(boxGeometry(0.44, 0.14, 0.44)), color: 'frame' },
+        { geo: keep(new OctahedronGeometry(0.27, 0)), color: 'glow', y: 0.32 },
+        { geo: keep(new OctahedronGeometry(0.15, 0)), color: 'glow', y: 0.56, z: 0.15 },
+        { geo: keep(boxGeometry(0.1, 0.06, 0.15)), color: 'clothTrim', y: 0.53, z: 0.32 },
+      ];
+    case 'kraken':
+      return [
+        { geo: keep(new OctahedronGeometry(0.3, 0)), color: 'flag', y: 0.1 },
+        { geo: keep(new CylinderGeometry(0.05, 0.03, 0.5, 5)), color: 'clothTrim', x: 0.2, y: -0.16, rotZ: 0.9 },
+        { geo: keep(new CylinderGeometry(0.05, 0.03, 0.5, 5)), color: 'clothTrim', x: -0.2, y: -0.16, rotZ: -0.9 },
+        { geo: keep(new CylinderGeometry(0.045, 0.03, 0.44, 5)), color: 'clothTrim', y: -0.24, rotZ: 0.15 },
+      ];
+    case 'clocktower':
+      return [
+        { geo: keep(new CylinderGeometry(0.15, 0.22, 1.2, 7)), color: 'frame' },
+        { geo: keep(new CylinderGeometry(0.2, 0.2, 0.07, 8)), color: 'cloth', y: 0.62, rotZ: Math.PI / 2 },
+        { geo: keep(boxGeometry(0.05, 0.16, 0.03)), color: 'metalTrim', x: 0.05, y: 0.66 },
+        { geo: keep(new OctahedronGeometry(0.12, 0)), color: 'metalTrim', y: 0.82 },
+      ];
     case 'hullExtension':
       return [
         { geo: keep(boxGeometry(0.6, 0.14, 1.4)), color: 'wood' },
         { geo: keep(boxGeometry(0.66, 0.06, 0.2)), color: 'metalTrim', y: 0.1, z: 0.5 },
         { geo: keep(boxGeometry(0.66, 0.06, 0.2)), color: 'metalTrim', y: 0.1, z: -0.5 },
+      ];
+    case 'barnacle':
+      return [
+        { geo: keep(new OctahedronGeometry(0.11, 0)), color: 'metal' },
+        { geo: keep(new OctahedronGeometry(0.075, 0)), color: 'metalTrim', x: 0.12, y: 0.05, z: 0.08 },
+        { geo: keep(new OctahedronGeometry(0.06, 0)), color: 'metal', x: -0.1, y: -0.03, z: -0.06 },
+      ];
+    case 'gullNest':
+      return [
+        { geo: keep(new CylinderGeometry(0.17, 0.13, 0.11, 7)), color: 'wood' },
+        { geo: keep(new OctahedronGeometry(0.055, 0)), color: 'cloth', x: 0.05, y: 0.07 },
+        { geo: keep(new OctahedronGeometry(0.05, 0)), color: 'cloth', x: -0.06, y: 0.07, z: 0.04 },
+        { geo: keep(new OctahedronGeometry(0.09, 0)), color: 'cloth', y: 0.13, z: -0.05 },
+      ];
+    case 'ghost':
+      return [
+        { geo: keep(new OctahedronGeometry(0.22, 0)), color: 'glass', y: 0.14 },
+        { geo: keep(new OctahedronGeometry(0.13, 0)), color: 'glass', y: 0.4 },
+        { geo: keep(new OctahedronGeometry(0.07, 0)), color: 'glass', x: 0.2, y: 0.2 },
+        { geo: keep(new OctahedronGeometry(0.07, 0)), color: 'glass', x: -0.2, y: 0.2 },
       ];
   }
 }

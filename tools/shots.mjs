@@ -154,11 +154,61 @@ async function main() {
       const { page, errors, context } = await openScene(
         browser,
         MOBILE_CTX,
-        url('phase=dusk&res=full&parts=engine*12,chimney*6,moss*8,cannon*4,lantern*4'),
+        url('phase=dusk&res=full&parts=engine*12,chimney*6,moss*8,cannon*4,lantern*4,barnacle*6,gullNest*3,ghost'),
       );
       const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
       await page.screenshot({ path: path.join(OUT, 'cursed-ship.png') });
       check('cursed-ship', '괴선', probe, errors);
+      await context.close();
+    }
+
+    // --- 항해모드 (WASD 로 암초를 향해 몬다 — 첫 암초는 반드시 정면에 있다) ---
+    {
+      const { page, errors, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=day&res=300&voyage=1&parts=engine*2,sail'),
+      );
+      await page.keyboard.down('w');
+      await page.waitForTimeout(3000);
+      await page.keyboard.up('w');
+      await page.waitForTimeout(400);
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await page.screenshot({ path: path.join(OUT, 'voyage.png') });
+      check('voyage', '항해', probe, errors);
+
+      // 계속 몰면 정면의 암초에 부딪힌다 — 튕김 + 토스트 (+확률로 따개비)
+      await page.keyboard.down('w');
+      await page.waitForTimeout(4500);
+      await page.keyboard.up('w');
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, 'voyage-hit.png') });
+      await context.close();
+    }
+
+    // --- 방치 컨텐츠 (80시간 비운 배 — 이끼·둥지·유령이 저절로 붙는다) ---
+    {
+      const { page, errors, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=day&res=300&away=80&parts=engine*2,lantern'),
+      );
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await page.screenshot({ path: path.join(OUT, 'idle-return.png') });
+      check('idle-return', '방치', probe, errors);
+      await context.close();
+    }
+
+    // --- 황금 오리 (저확률 밸런스 붕괴 부품) ---
+    {
+      const { page, errors, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=dusk&res=full&parts=goldenDuck,kraken,duck*3,wheelhouse,paddle*2'),
+      );
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await page.screenshot({ path: path.join(OUT, 'golden.png') });
+      check('golden', '황금', probe, errors);
       await context.close();
     }
 

@@ -1,7 +1,8 @@
 import type { GameSnapshot } from '../game/game.ts';
 import {
   PART_INFO,
-  kindsOfTier,
+  effectSummary,
+  gachaKindsOfTier,
   partBlurb,
   partLabel,
   type PartKind,
@@ -152,7 +153,8 @@ export class GachaPanel {
   }
 
   private buildWheel(tier: PartTier): void {
-    this.renderWheel(kindsOfTier(tier).map((kind) => partLabel(kind, locale())));
+    // 돌림판에는 뽑힐 수 있는 것만 올린다 — weight 0(항해·방치 전용)이 보이면 사기다
+    this.renderWheel(gachaKindsOfTier(tier).map((kind) => partLabel(kind, locale())));
   }
 
   /** 라벨만 받아 돌림판을 그린다 (부품·테마 공용) */
@@ -197,7 +199,7 @@ export class GachaPanel {
 
   /** 뽑힌 부품이 포인터 아래에 멈추도록 각도를 계산해 돌린다 */
   private spinTo(tier: PartTier, drawn: PartKind): Promise<void> {
-    const pool = kindsOfTier(tier);
+    const pool = gachaKindsOfTier(tier);
     return this.spinToIndex(pool.length, Math.max(0, pool.indexOf(drawn)));
   }
 
@@ -256,7 +258,7 @@ export class GachaPanel {
     this.note.textContent = t('gacha.mustEquip');
 
     this.buildWheel(tier);
-    const pool = kindsOfTier(tier);
+    const pool = gachaKindsOfTier(tier);
     const step = 360 / pool.length;
     this.angle = 360 - (Math.max(0, pool.indexOf(kind)) * step + step / 2);
     this.applyAngle('none');
@@ -285,6 +287,9 @@ export class GachaPanel {
       stat(t('gacha.statSlots'), def.addsSlots ? `+${def.addsSlots}` : `${def.slots}`),
       stat(t('gacha.statRate'), def.production > 0 ? `+${def.production.toFixed(1)}/s` : '—'),
     );
+    // 생산 외의 효과(할인·상한·수거·속도)가 있으면 셋째 칸으로 보여 준다
+    const fx = effectSummary(kind, loc);
+    if (fx !== null) this.resultStats.append(stat(t('gacha.statEffect'), fx));
 
     this.confirmBtn.hidden = false;
     this.closeBtn.disabled = true;

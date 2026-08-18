@@ -920,6 +920,13 @@ body {
   color: var(--mh-role-muted);
 }
 
+/* 생산 외 효과(할인·상한·수거·속도) — 교체 결정의 근거라 눈에 띄는 색으로 */
+.part-row__fx {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--mh-role-gauge);
+}
+
 .part-row__count {
   font-size: 16px;
   font-weight: 800;

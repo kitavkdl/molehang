@@ -46,6 +46,7 @@ const KO: Dict = {
   'gacha.replace': '{name} 빼고 장착',
   'gacha.statSlots': '자리',
   'gacha.statRate': '생산',
+  'gacha.statEffect': '효과',
 
   // 기록 시트
   'sheet.title': '항해 기록',
@@ -105,6 +106,17 @@ const KO: Dict = {
   'scope.aria': '망원경 배율',
   'scope.reset': '기본 배율로',
   'scope.value': '{n}배',
+
+  // 항해모드
+  'voyage.toggle': '항해',
+  'voyage.hint': 'WASD·방향키, 또는 화면을 끌어서 항해하세요 — 암초를 조심!',
+  'voyage.done': '정박',
+  'voyage.hit': '암초에 긁혔다!',
+
+  // 방치 컨텐츠 — 돌아왔을 때 배에 생긴 일
+  'idle.moss': '자리를 비운 사이 이끼가 앉았다 (+{n})',
+  'idle.gullNest': '갈매기가 둥지를 틀었다',
+  'idle.ghost': '오래 비운 배에 유령이 눌러앉았다',
 
   // 계정
   'auth.guest': '게스트',
@@ -199,6 +211,7 @@ const EN: Dict = {
   'gacha.replace': 'Remove {name} & install',
   'gacha.statSlots': 'Space',
   'gacha.statRate': 'Rate',
+  'gacha.statEffect': 'Effect',
 
   'sheet.title': 'Logbook',
   'sheet.statLifetime': 'Total scrap',
@@ -253,6 +266,15 @@ const EN: Dict = {
   'scope.aria': 'Telescope zoom',
   'scope.reset': 'Back to 1x',
   'scope.value': '{n}x',
+
+  'voyage.toggle': 'Sail',
+  'voyage.hint': 'Sail with WASD/arrows, or drag the screen — mind the reefs!',
+  'voyage.done': 'Drop anchor',
+  'voyage.hit': 'Scraped a reef!',
+
+  'idle.moss': 'Moss settled in while you were away (+{n})',
+  'idle.gullNest': 'A gull built a nest',
+  'idle.ghost': 'A ghost moved into the empty ship',
 
   'auth.guest': 'Guest',
   'auth.account': 'Account',

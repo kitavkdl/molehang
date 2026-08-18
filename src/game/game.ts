@@ -10,18 +10,22 @@ import type {
   MolehangGateway,
   PersistedState,
 } from './gateway.ts';
+import { idleGrowth, type IdleGrowth } from './idle.ts';
 import {
   PART_INFO,
   SHIP_TITLES,
+  capacityBoost,
   currentTitle,
   emptyInventory,
   gachaCost,
+  gachaDiscount,
   lightLevel,
   maxSlots,
   productionPerSecond,
   removableKinds,
   totalParts,
   usedSlots,
+  voyageSpeedBonus,
   type Inventory,
   type PartKind,
   type PartTier,
@@ -51,6 +55,8 @@ export interface GameSnapshot {
   slotsMax: number;
   /** 밤에 배를 밝히는 총량 */
   light: number;
+  /** 항해모드 속도 보너스 (부품 효과 합산) */
+  voyageSpeed: number;
   title: ShipTitle;
   unlockedTitles: string[];
   /** 등급별 다음 뽑기 가격 */
@@ -87,6 +93,13 @@ export class Game {
   private ready = false;
   private writeTimer: ReturnType<typeof setInterval> | null = null;
   private crew: CrewMember[] = [];
+
+  /** 이번 부팅에서 저절로 붙은 방치 부품들 — main 이 읽어 토스트로 알린다 */
+  lastIdleGrowth: IdleGrowth[] = [];
+  /** 방치 부품 장착으로 처음 달성한 칭호 id 들 */
+  lastIdleTitleIds: string[] = [];
+  /** 디버그(`?away=`) — 오프라인 시간을 강제한다. null 이면 게이트웨이 값 */
+  debugOfflineMs: number | null = null;
 
   private readonly collectListeners = new Set<(e: CollectEvent) => void>();
   private readonly changeListeners = new Set<(s: GameSnapshot) => void>();
@@ -125,6 +138,9 @@ export class Game {
     this.persisted = await this.gateway.load();
     this.ready = true;
 
+    // 방치 컨텐츠 — 오래 비운 배에는 이끼·둥지·유령이 저절로 붙는다 (idle.ts)
+    await this.applyIdleGrowth();
+
     if (this.channel !== null) {
       this.channel.onPresence((members) => {
         this.crew = members;
@@ -158,12 +174,32 @@ export class Game {
     return crewMultiplier(this.crew.length + 1);
   }
 
+  /**
+   * 마지막 정산 이후 흐른 시간으로 방치 부품을 붙인다.
+   * 장착은 게이트웨이 install 을 그대로 태운다 — 칭호 판정·저장 경로가 뽑기와 같아진다.
+   */
+  private async applyIdleGrowth(): Promise<void> {
+    const parts = this.persisted.parts;
+    const free = maxSlots(parts, this.config.baseSlots) - usedSlots(parts);
+    const offline = this.debugOfflineMs ?? this.gateway.offlineMs();
+    const growth = idleGrowth(offline, parts, free);
+
+    for (const item of growth) {
+      for (let i = 0; i < item.count; i++) {
+        const outcome = await this.gateway.install(item.kind, null, this.clock.now(), 1);
+        this.persisted = outcome.state;
+        if (outcome.newTitleId !== null) this.lastIdleTitleIds.push(outcome.newTitleId);
+      }
+    }
+    this.lastIdleGrowth = growth;
+  }
+
   snapshot(): GameSnapshot {
     const now = this.clock.now();
     const parts = this.persisted.parts;
     const basePerSecond = productionPerSecond(parts, this.config.baseProduction);
     const perSecond = basePerSecond * this.multiplier();
-    const capacity = capacityFor(basePerSecond, this.config);
+    const capacity = capacityFor(basePerSecond, this.config, capacityBoost(parts));
 
     const result = accrue(
       {
@@ -193,12 +229,13 @@ export class Game {
       slotsUsed: usedSlots(parts),
       slotsMax: maxSlots(parts, this.config.baseSlots),
       light: lightLevel(parts),
+      voyageSpeed: voyageSpeedBonus(parts),
       title: currentTitle(parts),
       unlockedTitles: this.persisted.titles,
       costs: {
-        small: gachaCost('small', this.persisted.pulls.small),
-        medium: gachaCost('medium', this.persisted.pulls.medium),
-        large: gachaCost('large', this.persisted.pulls.large),
+        small: gachaCost('small', this.persisted.pulls.small, gachaDiscount(parts)),
+        medium: gachaCost('medium', this.persisted.pulls.medium, gachaDiscount(parts)),
+        large: gachaCost('large', this.persisted.pulls.large, gachaDiscount(parts)),
       },
       theme: this.persisted.theme,
       themes: this.persisted.themes,

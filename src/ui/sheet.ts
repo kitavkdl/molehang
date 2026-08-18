@@ -6,6 +6,7 @@ import {
   PART_INFO,
   PART_KINDS,
   SHIP_TITLES,
+  effectSummary,
   partBlurb,
   partLabel,
   type PartKind,
@@ -267,6 +268,15 @@ function partRow(kind: PartKind, count: number, loc: 'ko' | 'en'): HTMLLIElement
   desc.textContent = partBlurb(kind, loc);
 
   left.append(head, desc);
+
+  // 생산 외 효과 — 교체 결정의 근거이므로 시트에서도 보인다
+  const fx = effectSummary(kind, loc);
+  if (fx !== null) {
+    const fxEl = document.createElement('span');
+    fxEl.className = 'part-row__fx';
+    fxEl.textContent = fx;
+    left.append(fxEl);
+  }
 
   const right = document.createElement('div');
   right.className = 'part-row__nums';

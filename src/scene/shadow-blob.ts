@@ -53,9 +53,9 @@ export class ShadowBlob {
     this.mesh.name = 'boat-shadow';
   }
 
-  update(elapsed: number): void {
-    // 물결 위에 얹혀 같이 출렁이게
-    this.mesh.position.y = sampleWave(0, 0, elapsed).height + 0.035;
+  update(elapsed: number, seaX = 0, seaZ = 0): void {
+    // 물결 위에 얹혀 같이 출렁이게 — 항해 중에는 배의 바다 좌표를 따라간다
+    this.mesh.position.y = sampleWave(seaX, seaZ, elapsed).height + 0.035;
     const pulse = 1 + 0.04 * Math.sin(elapsed * 1.1);
     // 선체가 길쭉하니 그림자도 같은 비율로 늘린다
     this.mesh.scale.set(0.6 * pulse, pulse, 1);

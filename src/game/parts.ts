@@ -29,6 +29,10 @@ export const PART_KINDS = [
   'barrel',
   'rope',
   'buoy',
+  'anchor',
+  'duck',
+  'net',
+  'weathervane',
   // 중간 부품 (2칸)
   'engine',
   'chimney',
@@ -36,17 +40,45 @@ export const PART_KINDS = [
   'cannon',
   'crane',
   'tank',
+  'wheelhouse',
+  'paddle',
+  'magnet',
   // 대형 부품 (3칸)
   'bigEngine',
   'turbine',
   'greatSail',
   'turret',
   'beacon',
+  // 대형 — 낮은 확률의 밸런스 붕괴 부품들 (의도된 것이다)
+  'goldenDuck',
+  'kraken',
+  'clocktower',
   // 특수 — 자리를 먹지 않고 오히려 늘린다
   'hullExtension',
+  // 뽑기에서 안 나온다 (weight 0) — 항해·방치로만 붙는 부품들
+  'barnacle',
+  'gullNest',
+  'ghost',
 ] as const;
 
 export type PartKind = (typeof PART_KINDS)[number];
+
+/**
+ * 부품 효과 — 있는 것만 채운다. 전부 **인벤토리에서 곱/합으로만 계산**되는 순수 값이라
+ * 서버 정산과 충돌하지 않는다 (생산량은 어차피 클라이언트가 보내고 서버가 클램프한다).
+ */
+export interface PartEffects {
+  /** 전체 생산 배율 (개당 곱). 1 초과면 밸런스 붕괴 후보 — 낮은 확률로만 나온다 */
+  prodMult?: number;
+  /** 미수거 상한 보너스 (+0.15 = +15%, 개수만큼 합산) */
+  capacity?: number;
+  /** 뽑기 가격 할인 (0.05 = 5%, 합산 후 50%에서 자른다) */
+  discount?: number;
+  /** 수거량 보너스 (0.1 = +10%, 합산) */
+  collect?: number;
+  /** 항해모드 속도 보너스 (유닛/초, 합산 후 상한) */
+  speed?: number;
+}
 
 export interface PartDef {
   kind: PartKind;
@@ -60,9 +92,11 @@ export interface PartDef {
   addsSlots?: number;
   /** 밤에 배를 밝히는 정도 (0이면 빛 없음) */
   light?: number;
+  /** 생산 외의 효과 */
+  effects?: PartEffects;
   label: Record<Locale, string>;
   blurb: Record<Locale, string>;
-  /** 같은 등급 안에서의 상대 등장 확률 */
+  /** 같은 등급 안에서의 상대 등장 확률. 0이면 뽑기에 안 나온다(항해·방치 전용) */
   weight: number;
 }
 
@@ -98,10 +132,34 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     label: { ko: '부표', en: 'Buoy' },
     blurb: { ko: '떠 있는 데 도움이 된다고 한다.', en: 'Allegedly helps with floating.' },
   },
+  anchor: {
+    kind: 'anchor', tier: 'small', zone: 'side', slots: 1, production: 0.5, weight: 12,
+    label: { ko: '닻', en: 'Anchor' },
+    blurb: { ko: '내리면 멈춘다고 한다. 아직 안 내려 봤다.', en: 'Supposedly stops the ship. Untested.' },
+  },
+  duck: {
+    kind: 'duck', tier: 'small', zone: 'deck', slots: 1, production: 0.2, weight: 10,
+    effects: { collect: 0.03 },
+    label: { ko: '고무 오리', en: 'Rubber duck' },
+    blurb: { ko: '사기 진작 담당. 수거가 조금 즐거워진다.', en: 'Morale officer. Collecting feels nicer.' },
+  },
+  net: {
+    kind: 'net', tier: 'small', zone: 'side', slots: 1, production: 0.4, weight: 12,
+    effects: { capacity: 0.08 },
+    label: { ko: '그물', en: 'Net' },
+    blurb: { ko: '자는 동안에도 뭔가 걸려 있다.', en: 'Something is always caught in it.' },
+  },
+  weathervane: {
+    kind: 'weathervane', tier: 'small', zone: 'mast', slots: 1, production: 0.6, weight: 10,
+    effects: { speed: 0.4 },
+    label: { ko: '풍향계', en: 'Weathervane' },
+    blurb: { ko: '바람을 읽는다. 항해가 빨라진다.', en: 'Reads the wind. Sails faster.' },
+  },
 
   // ---------------------------------------------------------------- 중간 부품
   engine: {
     kind: 'engine', tier: 'medium', zone: 'stern', slots: 2, production: 2.4, weight: 22,
+    effects: { speed: 0.35 },
     label: { ko: '엔진', en: 'Engine' },
     blurb: { ko: '추진력. 많을수록 시끄럽다.', en: 'Thrust. Louder in bulk.' },
   },
@@ -112,6 +170,7 @@ export const PART_INFO: Record<PartKind, PartDef> = {
   },
   sail: {
     kind: 'sail', tier: 'medium', zone: 'mast', slots: 2, production: 2.2, weight: 20,
+    effects: { speed: 0.5 },
     label: { ko: '돛', en: 'Sail' },
     blurb: { ko: '바람을 받는다. 가끔 너무 많이.', en: 'Catches wind. Sometimes too much.' },
   },
@@ -122,28 +181,51 @@ export const PART_INFO: Record<PartKind, PartDef> = {
   },
   crane: {
     kind: 'crane', tier: 'medium', zone: 'deck', slots: 2, production: 2.6, weight: 12,
+    effects: { collect: 0.05 },
     label: { ko: '기중기', en: 'Crane' },
     blurb: { ko: '고철을 더 빨리 끌어올린다.', en: 'Hauls scrap up faster.' },
   },
   tank: {
     kind: 'tank', tier: 'medium', zone: 'stern', slots: 2, production: 2.1, weight: 10,
+    effects: { capacity: 0.15 },
     label: { ko: '물탱크', en: 'Water tank' },
     blurb: { ko: '무겁지만 쓸모는 있다.', en: 'Heavy, but useful.' },
+  },
+  wheelhouse: {
+    kind: 'wheelhouse', tier: 'medium', zone: 'deck', slots: 2, production: 1.7, weight: 12,
+    effects: { discount: 0.05 },
+    label: { ko: '조타실', en: 'Wheelhouse' },
+    blurb: { ko: '계획이 생기니 낭비가 준다.', en: 'Planning reduces waste.' },
+  },
+  paddle: {
+    kind: 'paddle', tier: 'medium', zone: 'side', slots: 2, production: 2.2, weight: 10,
+    effects: { speed: 0.8 },
+    label: { ko: '외륜', en: 'Paddle wheel' },
+    blurb: { ko: '첨벙거리며 배를 민다.', en: 'Splashes the ship forward.' },
+  },
+  magnet: {
+    kind: 'magnet', tier: 'medium', zone: 'deck', slots: 2, production: 1.9, weight: 8,
+    effects: { collect: 0.1 },
+    label: { ko: '인양 자석', en: 'Salvage magnet' },
+    blurb: { ko: '지나가던 고철이 알아서 붙는다.', en: 'Passing scrap sticks on its own.' },
   },
 
   // ---------------------------------------------------------------- 대형 부품
   bigEngine: {
     kind: 'bigEngine', tier: 'large', zone: 'stern', slots: 3, production: 7.5, weight: 24,
+    effects: { speed: 1.0 },
     label: { ko: '대형 엔진', en: 'Heavy engine' },
     blurb: { ko: '갑판이 흔들릴 정도로 돈다.', en: 'Shakes the whole deck.' },
   },
   turbine: {
     kind: 'turbine', tier: 'large', zone: 'deck', slots: 3, production: 8.2, weight: 20,
+    effects: { speed: 0.8 },
     label: { ko: '증기 터빈', en: 'Steam turbine' },
     blurb: { ko: '뜨겁고 비싸고 효율이 좋다.', en: 'Hot, costly, efficient.' },
   },
   greatSail: {
     kind: 'greatSail', tier: 'large', zone: 'mast', slots: 3, production: 7.0, weight: 20,
+    effects: { speed: 1.2 },
     label: { ko: '대형 돛', en: 'Great sail' },
     blurb: { ko: '돛대가 버틸지는 모르겠다.', en: 'The mast may disagree.' },
   },
@@ -158,6 +240,32 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     blurb: { ko: '밤바다를 멀리까지 밝힌다.', en: 'Lights the sea for miles.' },
   },
 
+  // ------------------------------------------------- 밸런스 붕괴 (낮은 확률, 의도된 것)
+  goldenDuck: {
+    kind: 'goldenDuck', tier: 'large', zone: 'deck', slots: 2, production: 0, weight: 2,
+    effects: { prodMult: 2 },
+    label: { ko: '황금 오리', en: 'Golden duck' },
+    blurb: {
+      ko: '명백한 밸런스 붕괴. 배 전체 생산이 두 배가 된다.',
+      en: 'Obviously broken. Doubles all production.',
+    },
+  },
+  kraken: {
+    kind: 'kraken', tier: 'large', zone: 'side', slots: 2, production: 4.5, weight: 4,
+    effects: { collect: 0.25 },
+    label: { ko: '아기 크라켄', en: 'Baby kraken' },
+    blurb: { ko: '수거를 도와준다. 아직은 착하다.', en: 'Helps with collection. Friendly, for now.' },
+  },
+  clocktower: {
+    kind: 'clocktower', tier: 'large', zone: 'mast', slots: 3, production: 3.2, weight: 6,
+    effects: { capacity: 0.5 },
+    label: { ko: '고장난 시계탑', en: 'Broken clocktower' },
+    blurb: {
+      ko: '이 근처에서만 시간이 이상하게 흐른다.',
+      en: 'Time runs strange around it.',
+    },
+  },
+
   // ---------------------------------------------------------------- 특수
   hullExtension: {
     kind: 'hullExtension', tier: 'large', zone: 'deck', slots: 0, production: 0, addsSlots: 2,
@@ -166,6 +274,30 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     blurb: {
       ko: '자리를 2칸 늘린다. 대형 뽑기에서만 아주 드물게.',
       en: 'Adds 2 slots. Large draws only, rarely.',
+    },
+  },
+
+  // ------------------------------------- 뽑기에서 안 나온다 — 항해·방치로만 (weight 0)
+  barnacle: {
+    kind: 'barnacle', tier: 'small', zone: 'side', slots: 0, production: 0, weight: 0,
+    label: { ko: '따개비', en: 'Barnacle' },
+    blurb: { ko: '암초에 부딪힌 훈장. 떼는 법은 아무도 모른다.', en: 'A medal for hitting reefs. Non-removable.' },
+  },
+  gullNest: {
+    kind: 'gullNest', tier: 'small', zone: 'mast', slots: 0, production: 0.8, weight: 0,
+    label: { ko: '갈매기 둥지', en: 'Gull nest' },
+    blurb: {
+      ko: '오래 비운 사이 갈매기가 자리를 잡았다. 집세로 고철을 물어다 준다.',
+      en: 'A gull moved in while you were away. Pays rent in scrap.',
+    },
+  },
+  ghost: {
+    kind: 'ghost', tier: 'medium', zone: 'deck', slots: 0, production: 0, light: 2, weight: 0,
+    effects: { capacity: 0.2 },
+    label: { ko: '유령 선원', en: 'Ghost sailor' },
+    blurb: {
+      ko: '사흘 넘게 비운 배에 눌러앉았다. 밤에 은은하게 빛난다.',
+      en: 'Moved into the ship after three empty days. Glows at night.',
     },
   },
 };
@@ -180,6 +312,84 @@ export function partBlurb(kind: PartKind, loc: Locale): string {
 
 export function kindsOfTier(tier: PartTier): PartKind[] {
   return PART_KINDS.filter((k) => PART_INFO[k].tier === tier);
+}
+
+/** 뽑기 돌림판에 오르는 종류만 — weight 0 (항해·방치 전용)은 뺀다 */
+export function gachaKindsOfTier(tier: PartTier): PartKind[] {
+  return kindsOfTier(tier).filter((k) => PART_INFO[k].weight > 0);
+}
+
+/** 뽑기로 얻을 수 있는 모든 종류 (칭호 '잡동사니 방주'의 기준) */
+export function gachaKinds(): PartKind[] {
+  return PART_KINDS.filter((k) => PART_INFO[k].weight > 0);
+}
+
+// ---------------------------------------------------------------------------
+// 부품 효과 — 전부 인벤토리만 보는 순수 계산
+// ---------------------------------------------------------------------------
+
+/** 전체 생산 배율. 황금 오리가 겹치면 곱으로 는다 — 폭주 방지로 ×64에서 자른다 */
+export function prodMultiplier(inv: Inventory): number {
+  let mult = 1;
+  for (const k of PART_KINDS) {
+    const fx = PART_INFO[k].effects?.prodMult;
+    if (fx !== undefined && inv[k] > 0) mult *= fx ** inv[k];
+  }
+  return Math.min(64, mult);
+}
+
+/** 미수거 상한 배율 (1 + 합산, ×8에서 자른다) */
+export function capacityBoost(inv: Inventory): number {
+  let sum = 0;
+  for (const k of PART_KINDS) {
+    const fx = PART_INFO[k].effects?.capacity;
+    if (fx !== undefined) sum += fx * inv[k];
+  }
+  return Math.min(8, 1 + sum);
+}
+
+/** 뽑기 가격 할인율 (0~0.5) */
+export function gachaDiscount(inv: Inventory): number {
+  let sum = 0;
+  for (const k of PART_KINDS) {
+    const fx = PART_INFO[k].effects?.discount;
+    if (fx !== undefined) sum += fx * inv[k];
+  }
+  return Math.min(0.5, sum);
+}
+
+/** 수거량 배율 (1 + 합산, ×4에서 자른다) */
+export function collectBoost(inv: Inventory): number {
+  let sum = 0;
+  for (const k of PART_KINDS) {
+    const fx = PART_INFO[k].effects?.collect;
+    if (fx !== undefined) sum += fx * inv[k];
+  }
+  return Math.min(4, 1 + sum);
+}
+
+/** 항해모드 속도 보너스 (유닛/초, 최대 +4) */
+export function voyageSpeedBonus(inv: Inventory): number {
+  let sum = 0;
+  for (const k of PART_KINDS) {
+    const fx = PART_INFO[k].effects?.speed;
+    if (fx !== undefined) sum += fx * inv[k];
+  }
+  return Math.min(4, sum);
+}
+
+/** 효과를 한 줄로 — 뽑기 결과 화면과 기록 시트가 쓴다. 효과가 없으면 null */
+export function effectSummary(kind: PartKind, loc: Locale): string | null {
+  const fx = PART_INFO[kind].effects;
+  if (fx === undefined) return null;
+  const out: string[] = [];
+  const pct = (v: number): string => `${Math.round(v * 100)}%`;
+  if (fx.prodMult !== undefined) out.push(loc === 'ko' ? `생산 ×${fx.prodMult}` : `Rate ×${fx.prodMult}`);
+  if (fx.capacity !== undefined) out.push(loc === 'ko' ? `상한 +${pct(fx.capacity)}` : `Cap +${pct(fx.capacity)}`);
+  if (fx.discount !== undefined) out.push(loc === 'ko' ? `뽑기 −${pct(fx.discount)}` : `Draws −${pct(fx.discount)}`);
+  if (fx.collect !== undefined) out.push(loc === 'ko' ? `수거 +${pct(fx.collect)}` : `Collect +${pct(fx.collect)}`);
+  if (fx.speed !== undefined) out.push(loc === 'ko' ? '항해 속도 ↑' : 'Sails faster');
+  return out.length > 0 ? out.join(' · ') : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -221,9 +431,10 @@ export function maxSlots(inv: Inventory, base: number): number {
   return base + inv.hullExtension * (PART_INFO.hullExtension.addsSlots ?? 0);
 }
 
-/** 부품에서 나오는 초당 생산량 */
+/** 부품에서 나오는 초당 생산량 — 생산 배율(황금 오리 등)까지 곱한 최종값 */
 export function productionPerSecond(inv: Inventory, base: number): number {
-  return base + PART_KINDS.reduce((sum, k) => sum + inv[k] * PART_INFO[k].production, 0);
+  const flat = base + PART_KINDS.reduce((sum, k) => sum + inv[k] * PART_INFO[k].production, 0);
+  return flat * prodMultiplier(inv);
 }
 
 /** 밤에 배를 밝히는 총량 — 0이면 배가 어둠에 잠긴다 */
@@ -247,14 +458,15 @@ export const GACHA: Record<PartTier, { base: number; growth: number }> = {
   large: { base: 2600, growth: 1.12 },
 };
 
-export function gachaCost(tier: PartTier, pulls: number): number {
+/** discount 는 부품 효과(조타실)에서 온다 — gachaDiscount() 값을 그대로 넣는다 */
+export function gachaCost(tier: PartTier, pulls: number, discount = 0): number {
   const { base, growth } = GACHA[tier];
-  return Math.ceil(base * growth ** Math.max(0, pulls));
+  return Math.max(1, Math.ceil(base * growth ** Math.max(0, pulls) * (1 - discount)));
 }
 
-/** 등급 안에서 가중치로 하나 뽑는다 */
+/** 등급 안에서 가중치로 하나 뽑는다 (weight 0 은 풀에 없다) */
 export function rollPart(tier: PartTier, rand: () => number = Math.random): PartKind {
-  const pool = kindsOfTier(tier);
+  const pool = gachaKindsOfTier(tier);
   const total = pool.reduce((s, k) => s + PART_INFO[k].weight, 0);
   let ticket = rand() * total;
   for (const kind of pool) {
@@ -326,10 +538,28 @@ export const SHIP_TITLES: ShipTitle[] = [
     test: (inv) => inv.moss >= 10,
   },
   {
+    id: 'reefRegular',
+    name: { ko: '암초 단골', en: 'Reef Regular' },
+    hint: { ko: '따개비 6개 — 항해모드에서 암초에 부딪히면 붙는다', en: '6 barnacles — hit reefs while sailing' },
+    test: (inv) => inv.barnacle >= 6,
+  },
+  {
+    id: 'gullApartments',
+    name: { ko: '갈매기 아파트', en: 'Gull Apartments' },
+    hint: { ko: '갈매기 둥지 3개 — 하루 넘게 비우면 하나씩 생긴다', en: '3 gull nests — leave the ship for a day' },
+    test: (inv) => inv.gullNest >= 3,
+  },
+  {
     id: 'runaway',
     name: { ko: '폭주 기관선', en: 'Runaway Engine' },
     hint: { ko: '엔진 8개', en: '8 engines' },
     test: (inv) => inv.engine >= 8,
+  },
+  {
+    id: 'haunted',
+    name: { ko: '유령이 사는 배', en: 'Haunted Vessel' },
+    hint: { ko: '오래 비운 배에 온다', en: 'Comes to long-abandoned ships' },
+    test: (inv) => inv.ghost >= 1,
   },
   {
     id: 'dreadnought',
@@ -338,10 +568,16 @@ export const SHIP_TITLES: ShipTitle[] = [
     test: (inv) => kindsOfTier('large').reduce((s, k) => s + inv[k], 0) >= 5,
   },
   {
+    id: 'gilded',
+    name: { ko: '황금빛 착오', en: 'Gilded Mistake' },
+    hint: { ko: '황금 오리 1', en: '1 golden duck' },
+    test: (inv) => inv.goldenDuck >= 1,
+  },
+  {
     id: 'ark',
     name: { ko: '잡동사니 방주', en: 'Junk Ark' },
-    hint: { ko: '모든 종류 2개씩', en: '2 of every kind' },
-    test: (inv) => PART_KINDS.filter((k) => k !== 'hullExtension').every((k) => inv[k] >= 2),
+    hint: { ko: '뽑을 수 있는 모든 종류 2개씩', en: '2 of every drawable kind' },
+    test: (inv) => gachaKinds().filter((k) => k !== 'hullExtension').every((k) => inv[k] >= 2),
   },
 ];
 

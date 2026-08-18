@@ -10,8 +10,11 @@ import type {
 } from '../game/gateway.ts';
 import {
   PART_INFO,
+  capacityBoost,
+  collectBoost,
   emptyInventory,
   gachaCost,
+  gachaDiscount,
   maxSlots,
   productionPerSecond,
   rollPart,
@@ -88,6 +91,7 @@ function toState(row: ShipRow): PersistedState {
 
 export class SupabaseGateway implements MolehangGateway {
   private state: PersistedState;
+  private offline = 0;
 
   constructor(
     private readonly shipId: string,
@@ -120,8 +124,15 @@ export class SupabaseGateway implements MolehangGateway {
     if (error !== null) throw new Error(`[molehang] 배를 불러오지 못했습니다: ${error.message}`);
 
     this.state = toState(data as ShipRow);
+    // 정산이 last_accrued_at 을 덮기 전에 "얼마나 비웠는지"를 붙잡아 둔다 — 방치 컨텐츠용.
+    // 기기 시계와 서버 시계의 오차는 시간 단위 판정에는 무시해도 된다.
+    this.offline = Math.max(0, Date.now() - this.state.lastAccruedAt);
     // 불러온 직후 서버 기준으로 한 번 정산한다 (오프라인 축적)
     return this.sync(Date.now(), 1);
+  }
+
+  offlineMs(): number {
+    return this.offline;
   }
 
   async sync(_now: number, _multiplier = 1): Promise<PersistedState> {
@@ -129,7 +140,7 @@ export class SupabaseGateway implements MolehangGateway {
     const { data, error } = await supabase().rpc('sync_ship', {
       p_ship: this.shipId,
       p_per_second: perSecond,
-      p_capacity: capacityFor(perSecond, this.config),
+      p_capacity: capacityFor(perSecond, this.config, capacityBoost(this.state.parts)),
     });
     if (error !== null || data === null) return this.snapshot();
 
@@ -140,8 +151,11 @@ export class SupabaseGateway implements MolehangGateway {
 
   async collect(now: number, multiplier = 1): Promise<CollectOutcome> {
     await this.sync(now, multiplier);
-    const { taken, left } = collectFrom(this.state.pending, this.config);
-    if (taken <= 0) return { state: this.snapshot(), taken: 0, entry: null };
+    const { taken: raw, left } = collectFrom(this.state.pending, this.config);
+    if (raw <= 0) return { state: this.snapshot(), taken: 0, entry: null };
+
+    // 수거 보너스(기중기·자석·크라켄) — LocalGateway 와 같은 규칙
+    const taken = Math.round(raw * collectBoost(this.state.parts));
 
     const entry: CollectLogEntry = {
       id: `${now.toString(36)}-${Math.floor(this.rand() * 1e6).toString(36)}`,
@@ -171,7 +185,7 @@ export class SupabaseGateway implements MolehangGateway {
   // 서버 정산(sync_ship)은 선단 배율을 모른다 — 배율 인자는 인터페이스 호환용으로만 받는다
   async draw(tier: PartTier, now: number, _multiplier = 1): Promise<DrawOutcome> {
     await this.sync(now, 1);
-    const cost = gachaCost(tier, this.state.pulls[tier]);
+    const cost = gachaCost(tier, this.state.pulls[tier], gachaDiscount(this.state.parts));
     if (this.state.scrap < cost) return { state: this.snapshot(), drawn: null, needsRoom: false };
 
     this.state.scrap -= cost;

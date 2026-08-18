@@ -67,7 +67,7 @@ const waveGLSL = WAVES.map((w) => {
   const k = (Math.PI * 2) / w.length;
   return /* glsl */ `
   {
-    float ph = ${f(k)} * (p.x * ${f(w.dx)} + p.z * ${f(w.dz)}) + uTime * ${f(w.speed)};
+    float ph = ${f(k)} * (wp.x * ${f(w.dx)} + wp.y * ${f(w.dz)}) + uTime * ${f(w.speed)};
     h  += ${f(w.amp)} * sin(ph);
     sx += ${f(w.amp * k * w.dx)} * cos(ph);
     sz += ${f(w.amp * k * w.dz)} * cos(ph);
@@ -76,6 +76,7 @@ const waveGLSL = WAVES.map((w) => {
 
 const VERT = /* glsl */ `
 uniform float uTime;
+uniform vec2 uOffset;
 varying float vHeight;
 varying vec3 vNorm;
 varying float vDist;
@@ -83,6 +84,10 @@ varying vec2 vXZ;
 
 void main() {
   vec3 p = position;
+  // 항해모드 — 배는 원점에 있고 **바다가 배 밑을 흐른다.**
+  // 파도 위상만 바다 좌표(wp)로 옮기고, 헤이즈·반사 길은 화면(지오메트리) 기준을
+  // 유지한다. 그래야 수평선과 빛기둥이 카메라에 붙박인 채 물결만 지나간다.
+  vec2 wp = p.xz + uOffset;
   float h = 0.0;
   float sx = 0.0;
   float sz = 0.0;
@@ -203,6 +208,7 @@ export class Ocean {
     this.material = new ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
+        uOffset: { value: new Vector2(0, 0) },
         uDeep: { value: new Color() },
         uMid: { value: new Color() },
         uCrest: { value: new Color() },
@@ -226,9 +232,10 @@ export class Ocean {
     this.group.name = 'ocean';
   }
 
-  update(state: SkyState, elapsed: number): void {
+  update(state: SkyState, elapsed: number, offsetX = 0, offsetZ = 0): void {
     const u = this.material.uniforms;
     u.uTime!.value = elapsed;
+    (u.uOffset!.value as Vector2).set(offsetX, offsetZ);
     (u.uDeep!.value as Color).copy(state.oceanDeep);
     (u.uMid!.value as Color).copy(state.oceanMid);
     (u.uCrest!.value as Color).copy(state.oceanCrest);

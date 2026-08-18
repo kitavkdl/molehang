@@ -12,8 +12,11 @@ import { isThemeId, rollTheme, themeCost, type ThemeId } from '../style/themes.t
 import {
   PART_INFO,
   PART_TIERS,
+  capacityBoost,
+  collectBoost,
   emptyInventory,
   gachaCost,
+  gachaDiscount,
   maxSlots,
   productionPerSecond,
   rollPart,
@@ -36,6 +39,7 @@ import {
  */
 export class LocalGateway implements MolehangGateway {
   private state: PersistedState;
+  private offline = 0;
 
   constructor(
     private readonly config: GameConfig = GAME_CONFIG,
@@ -44,11 +48,17 @@ export class LocalGateway implements MolehangGateway {
     private readonly storageKey: string = STORAGE_KEY,
   ) {
     this.state = this.read();
+    // 정산으로 lastAccruedAt 이 덮이기 전에 "얼마나 비웠는지"를 붙잡아 둔다 — 방치 컨텐츠용
+    this.offline = Math.max(0, Date.now() - this.state.lastAccruedAt);
   }
 
   async load(): Promise<PersistedState> {
     // 오프라인 구간에는 선단 보너스를 주지 않는다 — 같이 있을 때만 붙는 값이다
     return this.sync(Date.now(), 1);
+  }
+
+  offlineMs(): number {
+    return this.offline;
   }
 
   async sync(now: number, multiplier = 1): Promise<PersistedState> {
@@ -59,7 +69,7 @@ export class LocalGateway implements MolehangGateway {
         pending: this.state.pending,
         now,
         perSecond,
-        capacity: capacityFor(perSecond, this.config),
+        capacity: capacityFor(perSecond, this.config, capacityBoost(this.state.parts)),
         multiplier,
       },
       this.config,
@@ -72,9 +82,12 @@ export class LocalGateway implements MolehangGateway {
 
   async collect(now: number, multiplier = 1): Promise<CollectOutcome> {
     await this.sync(now, multiplier);
-    const { taken, left } = collectFrom(this.state.pending, this.config);
+    const { taken: raw, left } = collectFrom(this.state.pending, this.config);
 
-    if (taken <= 0) return { state: this.snapshot(), taken: 0, entry: null };
+    if (raw <= 0) return { state: this.snapshot(), taken: 0, entry: null };
+
+    // 수거 보너스(기중기·자석·크라켄) — 미수거분에서 빼는 게 아니라 얹어 주는 몫이다
+    const taken = Math.round(raw * collectBoost(this.state.parts));
 
     const entry: CollectLogEntry = {
       id: `${now.toString(36)}-${Math.floor(this.rand() * 1e6).toString(36)}`,
@@ -100,7 +113,7 @@ export class LocalGateway implements MolehangGateway {
   async draw(tier: PartTier, now: number, multiplier = 1): Promise<DrawOutcome> {
     // 정산에 선단 배율을 그대로 태운다 — 1로 굳히면 뽑을 때마다 보너스 축적분이 증발한다
     await this.sync(now, multiplier);
-    const cost = gachaCost(tier, this.state.pulls[tier]);
+    const cost = gachaCost(tier, this.state.pulls[tier], gachaDiscount(this.state.parts));
     if (this.state.scrap < cost) {
       return { state: this.snapshot(), drawn: null, needsRoom: false };
     }
@@ -198,7 +211,7 @@ export class LocalGateway implements MolehangGateway {
   }
 
   async debugSetPending(amount: number): Promise<PersistedState> {
-    const cap = capacityFor(this.perSecond(), this.config);
+    const cap = capacityFor(this.perSecond(), this.config, capacityBoost(this.state.parts));
     this.state.pending = Math.max(0, Math.min(cap, amount));
     this.state.lastAccruedAt = Date.now();
     this.write();

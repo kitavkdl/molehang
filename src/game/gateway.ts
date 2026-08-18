@@ -75,6 +75,11 @@ export interface InstallOutcome {
 export interface MolehangGateway {
   /** 부팅 시 1회 — 오프라인 축적분이 이미 반영된 상태를 돌려준다 (보너스 미적용) */
   load(): Promise<PersistedState>;
+  /**
+   * 이번 부팅에서 마지막 정산 이후 흐른 시간(ms). load() 뒤에만 의미가 있다.
+   * 방치 컨텐츠(이끼·둥지·유령)가 이 값 하나로 판정한다. (game/idle.ts)
+   */
+  offlineMs(): number;
   /** 지금까지의 축적을 정산해 저장. multiplier 는 선단 보너스 */
   sync(now: number, multiplier?: number): Promise<PersistedState>;
   /** 수거 확정 — 미수거분이 고철 잔고로 들어간다 */

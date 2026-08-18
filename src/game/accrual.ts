@@ -68,9 +68,15 @@ export function collectFrom(
   return { taken: amount, left: pending - amount };
 }
 
-/** 생산량에 비례하는 미수거 상한 */
-export function capacityFor(perSecond: number, config: GameConfig): number {
-  return Math.max(config.minCapacity, Math.round(perSecond * config.capacitySeconds));
+/**
+ * 생산량에 비례하는 미수거 상한.
+ * boost 는 부품 효과(물탱크·시계탑)에서 온다 — parts.ts 의 capacityBoost() 값.
+ */
+export function capacityFor(perSecond: number, config: GameConfig, boost = 1): number {
+  return Math.max(
+    config.minCapacity,
+    Math.round(perSecond * config.capacitySeconds * Math.max(1, safeNumber(boost, 1))),
+  );
 }
 
 export function fillRatio(pending: number, capacity: number): number {
