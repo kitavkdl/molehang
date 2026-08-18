@@ -11,6 +11,7 @@ import {
 } from 'three';
 import { flat, type FlatMaterial } from './flat-material.ts';
 import { FX_COLORS, int } from '../style/palette.ts';
+import { BOAT_YAW } from './hull.ts';
 import { sampleWave } from './ocean.ts';
 
 /**
@@ -21,7 +22,18 @@ import { sampleWave } from './ocean.ts';
  *   - 바다 셰이더는 파도 위상을 seaX/seaZ 만큼 밀고(ocean.ts uOffset),
  *     소품은 (소품 좌표 − 배 좌표) 자리에 그려진다.
  *   - 덕분에 §4.1 의 구도, §4.8 의 망원경, 배치 드래그가 전부 **그대로** 동작한다.
- *     카메라는 여전히 회전하지 않는다 — 항해도 같은 쪽에서 본다.
+ *
+ * **회전 (사용자 요청으로 §4.8/§4.9 의 "회전 없음"을 항해에 한해 뒤집었다):**
+ *   - 배는 가려는 방향으로 **뱃머리를 돌린다**(heading). 회두 속도에는 한계가 있고,
+ *     추력은 뱃머리 정렬(cos²)에 비례한다 — **완전히 돌아서야 최고 속도가 난다.**
+ *   - 카메라는 달리기 시작하면 선미 뒤로 돌아붙는 체이스 캠(viewYaw)이다.
+ *     끌어서 조향하면 화면도 함께 도는 셈이다. 마우스 우클릭 드래그는 자유 회전.
+ *   - 입력은 **카메라 기준**이다 — 화면 위쪽으로 끌면 지금 보는 방향으로 나아간다.
+ *   - 정박하면 뱃머리·카메라 모두 §4.1 기본 구도로 서서히 돌아온다.
+ *     망원경(정박 중)에는 여전히 회전이 없다.
+ *
+ * **선체 손상 (사용자 요청):** 암초에 부딪히면 내구도(hull)가 깎여 최고 속도가
+ * 준다. 가라앉지는 않는다 — 바닥 45%. 정박해 있으면 서서히 아문다.
  *
  * 바다 소품은 두 부류다.
  *   - 부딪히는 것(암초·바위기둥·모래섬): 튕겨나고 따개비가 붙는다. 벌점은 없다.
@@ -50,6 +62,16 @@ const HIT_COOLDOWN = 1.3;
 const KNOCKBACK = 5;
 /** 기본 항해 속도 (유닛/초). 엔진·돛이 speedBonus 로 얹힌다 */
 const BASE_SPEED = 3.2;
+/** 회두 속도 (라디안/초) — 무거운 배는 더 굼뜨게 돈다 */
+const TURN_RATE = 1.7;
+/** 암초 한 번에 깎이는 내구도 */
+const HULL_HIT = 0.14;
+/** 정박 상태에서 내구도 전량을 회복하는 데 걸리는 시간 (초) */
+const HULL_REPAIR_SEC = 40;
+/** 손상돼도 이 비율 밑으로는 안 느려진다 — 벌점이 게임을 멈추게 하지는 않는다 */
+const HULL_SPEED_FLOOR = 0.45;
+/** 우클릭 드래그 1px 이 돌리는 각 (라디안) */
+const ORBIT_GAIN = 0.006;
 /** 화면 끌기 조이스틱 — 이 픽셀 거리에서 최대 속도가 된다 */
 const STICK_RANGE = 70;
 /** 솟아오르기 / 가라앉기 시간 (초) */
@@ -175,6 +197,16 @@ export class Voyage {
   speedBonus = 0;
   /** 배 무게 (parts.ts shipHeft) — 무거울수록 최고속도·가속이 깎인다 */
   heft = 0;
+  /** 뱃머리 방향 (Y 회전, 라디안). 정박 기본값은 §4.1 의 전시 각도 */
+  heading = BOAT_YAW;
+  /** 체이스 캠 각 — 달리면 선미 뒤(heading+π)로 따라 돈다 */
+  private viewYawAngle = 0;
+  /** 우클릭 드래그로 얹는 자유 회전 오프셋 — 손을 떼면 서서히 풀린다 */
+  private orbitOffset = 0;
+  private orbitPointer: number | null = null;
+  private orbitX = 0;
+  /** 선체 내구도 0~1 — 암초에 깎이고 정박하면 아문다 */
+  private hull = 1;
 
   private props: Prop[] = [];
   private readonly splashes: Splash[] = [];
@@ -198,6 +230,10 @@ export class Voyage {
 
   private lastHit = -Infinity;
   private spawnTimer = 0;
+  /** 출항 직후, 실제 진행 방향 앞에 암초 하나를 보장 배치하기 위한 플래그 */
+  private aheadReef = false;
+  /** 뱃머리가 돌지 않은 채 흐른 시간 — 항로 확정 감지용 */
+  private steadyFor = 0;
   private readonly hitListeners = new Set<() => void>();
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -245,6 +281,8 @@ export class Voyage {
     globalThis.addEventListener('pointermove', this.onMove);
     globalThis.addEventListener('pointerup', this.onUp);
     globalThis.addEventListener('pointercancel', this.onUp);
+    // 우클릭 드래그가 자유 회전이다 — 항해 중에는 브라우저 메뉴가 끼어들면 안 된다
+    this.canvas.addEventListener('contextmenu', this.onContext);
   }
 
   dispose(): void {
@@ -256,6 +294,7 @@ export class Voyage {
     globalThis.removeEventListener('pointermove', this.onMove);
     globalThis.removeEventListener('pointerup', this.onUp);
     globalThis.removeEventListener('pointercancel', this.onUp);
+    this.canvas.removeEventListener('contextmenu', this.onContext);
     for (const prop of this.props) for (const g of prop.geos) g.dispose();
     for (const s of this.splashes) s.material.dispose();
     this.splashGeo.dispose();
@@ -280,6 +319,16 @@ export class Voyage {
     return Math.hypot(this.vx, this.vz);
   }
 
+  /** 카메라가 배를 도는 각 — world.ts 가 매 프레임 카메라를 이만큼 돌린다 */
+  get viewYaw(): number {
+    return this.viewYawAngle + this.orbitOffset;
+  }
+
+  /** 선체 내구도 0~1 — 항해 UI 게이지가 읽는다 */
+  get hullIntegrity(): number {
+    return this.hull;
+  }
+
   setActive(active: boolean): void {
     if (this.active === active) return;
     this.active = active;
@@ -287,6 +336,7 @@ export class Voyage {
     this.stickX = 0;
     this.stickZ = 0;
     this.pointerId = null;
+    this.orbitPointer = null;
     if (active) {
       // 출항 — 소품들이 물속에서 솟아오른다. 첫 항해든 재출항이든 똑같이.
       if (this.props.length === 0) this.seedProps();
@@ -301,12 +351,12 @@ export class Voyage {
   }
 
   /**
-   * 첫 출항의 소품들 — 암초 하나는 **반드시 정면**에 둔다.
-   * 전부 난수에 맡기면 "암초라더니 아무것도 없는데?" 로 끝나는 첫 항해가 나온다.
-   * 풍경(부표·유목)도 하나씩 심어 "장애물 코스"가 아니라 "바다"로 시작하게 한다.
+   * 첫 출항의 소품들 — 배가 회전하게 된 뒤로 초기 항로가 살짝 휘므로,
+   * "정면 암초"는 고정 좌표가 아니라 **속도가 붙은 순간 실제 진행 방향 앞**에
+   * 심는다(update 의 aheadReef). 여기서는 주변 풍경만 깔아 "바다"로 시작하게 한다.
    */
   private seedProps(): void {
-    this.addProp('reef', this.seaX + 3, this.seaZ - 27, 1.5);
+    this.aheadReef = true;
     this.addProp('reef', this.seaX - 16, this.seaZ - 48, 1.2);
     this.addProp('spire', this.seaX + 22, this.seaZ - 60, 1.6);
     this.addProp('buoy', this.seaX - 7, this.seaZ - 18, 0.6);
@@ -322,22 +372,74 @@ export class Voyage {
       if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) iz += 1;
       if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) ix -= 1;
       if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) ix += 1;
-      const mag = Math.hypot(ix, iz);
+      let mag = Math.hypot(ix, iz);
       if (mag > 1) {
         ix /= mag;
         iz /= mag;
+        mag = 1;
       }
+
+      // 입력은 카메라 기준 — 화면 위쪽으로 밀면 "지금 보는 방향"으로 나아간다.
+      // 체이스 캠이 돌아도 조작이 화면과 어긋나지 않는 유일한 방법이다.
+      const view = this.viewYaw;
+      const cv = Math.cos(view);
+      const sv = Math.sin(view);
+      const wx = ix * cv + iz * sv;
+      const wz = -ix * sv + iz * cv;
 
       // 무게 드래그 — 무거운 배는 최고속도가 깎이고(바닥 55%) 가속도 굼뜨다.
       // 엔진(speedBonus)이 무게와 싸운다: 엔진 범벅의 무거운 배는 결국 다시 빨라진다
       const drag = Math.max(0.55, 1 / (1 + this.heft * 0.012));
-      const max = (BASE_SPEED + this.speedBonus) * drag;
+      // 손상 페널티 — 긁힌 배는 느리다. 바닥이 있어 멈추지는 않는다
+      const damaged = HULL_SPEED_FLOOR + (1 - HULL_SPEED_FLOOR) * this.hull;
+      const max = (BASE_SPEED + this.speedBonus) * drag * damaged;
+
+      // 회두 — 배는 옆으로 미끄러지지 않는다. 뱃머리를 돌려서 그 방향으로만 민다.
+      const headingBefore = this.heading;
+      let thrust = 0;
+      if (mag > 0.08) {
+        const target = Math.atan2(wx, wz);
+        const delta = angleDelta(this.heading, target);
+        const step = TURN_RATE * (0.55 + 0.45 * drag) * dt;
+        this.heading = wrapAngle(this.heading + clampAbs(delta, step));
+        // 정렬 추력 — 뱃머리가 목표와 일치해야(cos²) 최고 속도가 난다.
+        // 바닥 12%는 회두 중에도 조금은 나아가게 하는 몫이다
+        const align = Math.max(0, Math.cos(delta));
+        thrust = mag * max * (0.12 + 0.88 * align * align);
+      }
+
       const ease = Math.min(1, dt * (1.4 + 2.0 * drag));
-      this.vx += (ix * max - this.vx) * ease;
-      this.vz += (iz * max - this.vz) * ease;
+      this.vx += (Math.sin(this.heading) * thrust - this.vx) * ease;
+      this.vz += (Math.cos(this.heading) * thrust - this.vz) * ease;
 
       this.seaX += this.vx * dt;
       this.seaZ += this.vz * dt;
+
+      // 체이스 캠 — 달리기 시작해야 선미 뒤로 돌아붙는다.
+      // 서 있을 때 돌면 출항 버튼을 누르는 순간 화면이 홱 돈다
+      const chase = Math.min(1, this.speed / 1.6);
+      this.viewYawAngle = wrapAngle(
+        this.viewYawAngle +
+          angleDelta(this.viewYawAngle, wrapAngle(this.heading + Math.PI)) *
+            Math.min(1, dt * 2.0 * chase),
+      );
+
+      // 보장 암초 — 속도가 붙고 **뱃머리가 실제로 멈춘**(항로 확정) 순간,
+      // 그 정면에 하나 심는다. 회두가 끝나기 전에 심으면 배가 옆으로 비켜 가서
+      // "암초를 조심!"이라 해 놓고 아무것도 안 나오는 첫 항해가 된다.
+      // 카메라 정착으로 판정하면 안 된다 — 체이스 캠은 회두 내내 배 뒤에
+      // 바짝 붙어 있어서, 배와 카메라가 같이 도는 동안에도 "정착"으로 읽힌다
+      if (Math.abs(angleDelta(headingBefore, this.heading)) < dt * 0.1 && this.speed > 2.2) {
+        this.steadyFor += dt;
+      } else {
+        this.steadyFor = 0;
+      }
+      if (this.aheadReef && this.steadyFor > 0.4) {
+        this.aheadReef = false;
+        const dirX = this.vx / this.speed;
+        const dirZ = this.vz / this.speed;
+        this.addProp('reef', this.seaX + dirX * 34 - dirZ, this.seaZ + dirZ * 34 + dirX, 1.5);
+      }
 
       // --- 소품 보충 — 달릴수록 풍경이 잦아진다 (지나가는 맛) ---
       this.spawnTimer -= dt * (1 + this.speed * 0.18);
@@ -345,6 +447,23 @@ export class Voyage {
         this.spawnAhead();
         this.spawnTimer = 1.4 + Math.random() * 1.8;
       }
+    }
+
+    if (!this.active) {
+      // 정박 — 뱃머리와 카메라가 §4.1 기본 구도로 서서히 돌아온다
+      this.heading = wrapAngle(
+        this.heading + angleDelta(this.heading, BOAT_YAW) * Math.min(1, dt * 1.3),
+      );
+      this.viewYawAngle = wrapAngle(
+        this.viewYawAngle + angleDelta(this.viewYawAngle, 0) * Math.min(1, dt * 1.6),
+      );
+      // 정박 중에는 선체가 아문다 — 수리비 같은 건 없다
+      this.hull = Math.min(1, this.hull + dt / HULL_REPAIR_SEC);
+    }
+    // 우클릭 자유 회전은 손을 떼면 체이스 캠 자리로 서서히 풀린다
+    if (this.orbitPointer === null && this.orbitOffset !== 0) {
+      this.orbitOffset *= Math.exp(-dt * 0.6);
+      if (Math.abs(this.orbitOffset) < 1e-3) this.orbitOffset = 0;
     }
 
     // --- 소품 배치·연출·정리·충돌 (정박 중에도 가라앉기는 계속 굴린다) ---
@@ -407,7 +526,9 @@ export class Voyage {
         dist > 1e-3
       ) {
         this.lastHit = elapsed;
-        // 암초 반대쪽으로 튕겨 나간다. 벌점은 없다 — 따개비가 붙을 뿐이다(main.ts)
+        // 암초 반대쪽으로 튕겨 나가고, 선체가 상한다 (사용자 요청 — §4.9 개정).
+        // 가라앉지는 않는다. 따개비는 여전히 확률로 붙는다(main.ts)
+        this.hull = Math.max(0, this.hull - HULL_HIT);
         const nx = -dx / dist;
         const nz = -dz / dist;
         this.vx = nx * KNOCKBACK;
@@ -681,27 +802,48 @@ export class Voyage {
     this.stickX = 0;
     this.stickZ = 0;
     this.pointerId = null;
+    this.orbitPointer = null;
   };
 
   private readonly onDown = (e: PointerEvent): void => {
-    if (!this.active || this.pointerId !== null) return;
+    if (!this.active) return;
+    // 우클릭(보조 버튼) 드래그 = 카메라 자유 회전
+    if (e.button === 2) {
+      this.orbitPointer = e.pointerId;
+      this.orbitX = e.clientX;
+      return;
+    }
+    if (this.pointerId !== null) return;
     this.pointerId = e.pointerId;
     this.startX = e.clientX;
     this.startY = e.clientY;
   };
 
   private readonly onMove = (e: PointerEvent): void => {
+    if (e.pointerId === this.orbitPointer) {
+      this.orbitOffset -= (e.clientX - this.orbitX) * ORBIT_GAIN;
+      this.orbitX = e.clientX;
+      return;
+    }
     if (e.pointerId !== this.pointerId) return;
-    // 누른 자리에서 끈 방향이 곧 타륜 — 위로 끌면 수평선 쪽(-z)으로 나아간다
+    // 누른 자리에서 끈 방향이 곧 타륜 — 위로 끌면 "지금 보는" 수평선 쪽으로 나아간다
     this.stickX = clamp((e.clientX - this.startX) / STICK_RANGE);
     this.stickZ = clamp((e.clientY - this.startY) / STICK_RANGE);
   };
 
   private readonly onUp = (e: PointerEvent): void => {
+    if (e.pointerId === this.orbitPointer) {
+      this.orbitPointer = null;
+      return;
+    }
     if (e.pointerId !== this.pointerId) return;
     this.pointerId = null;
     this.stickX = 0;
     this.stickZ = 0;
+  };
+
+  private readonly onContext = (e: Event): void => {
+    if (this.active) e.preventDefault();
   };
 }
 
@@ -712,4 +854,24 @@ const KEYS = new Set([
 
 function clamp(v: number): number {
   return v < -1 ? -1 : v > 1 ? 1 : v;
+}
+
+function clampAbs(v: number, limit: number): number {
+  return v < -limit ? -limit : v > limit ? limit : v;
+}
+
+/** from 에서 to 로 가는 최단 각 차이 (-π ~ π) */
+function angleDelta(from: number, to: number): number {
+  let d = (to - from) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+/** 각을 -π ~ π 로 감는다 — 무한히 자라는 각은 언젠가 정밀도를 잃는다 */
+function wrapAngle(a: number): number {
+  let w = a % (Math.PI * 2);
+  if (w > Math.PI) w -= Math.PI * 2;
+  if (w < -Math.PI) w += Math.PI * 2;
+  return w;
 }

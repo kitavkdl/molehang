@@ -173,6 +173,8 @@ export class Boat {
     }
 
     this.body.add(this.rig);
+    // 요(yaw)가 먼저 돌고 그 위에 배 기준 트림(피치·롤)이 얹혀야 한다
+    this.body.rotation.order = 'YXZ';
     this.body.rotation.y = BOAT_YAW;
     this.group.add(this.body);
     this.group.name = 'boat';
@@ -360,9 +362,18 @@ export class Boat {
   /**
    * 파도 위에서 흔들린다 — 바다 셰이더와 같은 파형 함수를 공유.
    * 항해모드에서는 배가 바다 위 (seaX, seaZ) 에 "있다" — 그 자리의 파도를 탄다.
-   * vx/vz 는 항해 속도 — 움직이는 쪽으로 살짝 기울여 몰고 있다는 감각을 준다.
+   * vx/vz 는 항해 속도, heading 은 뱃머리 방향(voyage.ts) — 배는 그 방향으로
+   * 몸을 돌리고, 속도는 배 기준 앞뒤/좌우로 나눠 트림(피치·롤)이 된다.
    */
-  update(elapsed: number, dt: number, seaX = 0, seaZ = 0, vx = 0, vz = 0): void {
+  update(
+    elapsed: number,
+    dt: number,
+    seaX = 0,
+    seaZ = 0,
+    vx = 0,
+    vz = 0,
+    heading = BOAT_YAW,
+  ): void {
     const { height, slopeX, slopeZ } = sampleWave(seaX, seaZ, elapsed);
     const speed = Math.hypot(vx, vz);
     /** 0(정박) ~ 1(전속) — 항해 연출은 전부 이 값에 비례한다 */
@@ -378,15 +389,27 @@ export class Boat {
       bounceLift = 0.14 * decay * Math.sin(t * 13);
     }
 
-    // 무거운 배는 물에 더 잠긴다 (§4.9). 항해 중에는 이따금 더 가라앉으려는
-    // 느린 출렁임이 얹힌다 — 가라앉지는 않는다. 갑판은 언제나 물 위에 남는다.
+    // 부력 — 갓 태어난 빈 배는 코르크처럼 높이 뜨고, 부품(heft)이 쌓일수록
+    // 조금씩 가라앉는다. 무거운 배는 그 위에 settle 로 더 잠긴다 (§4.9).
+    // 항해 중에는 이따금 더 가라앉으려는 느린 출렁임(surge)이 얹힌다 —
+    // 가라앉지는 않는다. 갑판은 언제나 물 위에 남는다.
+    const buoy = 0.3 * Math.exp(-this.heft / 26);
     const settle = Math.min(0.2, this.heft * 0.004);
     const surge =
       Math.min(0.12, this.heft * 0.0025) * drive * (0.5 + 0.5 * Math.sin(elapsed * 0.85));
 
-    this.group.position.y = height + bounceLift - settle - surge;
-    this.group.rotation.z = -slopeX * 0.55 - vx * 0.028;
-    this.group.rotation.x = slopeZ * 0.55 + vz * 0.02;
+    this.group.position.y = height + bounceLift + buoy - settle - surge;
+    // 파도 기울기는 세계축(파도가 세계에 있으니까), 속도 트림은 배 기준(아래)
+    this.group.rotation.z = -slopeX * 0.55;
+    this.group.rotation.x = slopeZ * 0.55;
+
+    // 뱃머리 방향 — 항해모드가 돌리고, 정박하면 §4.1 전시 각도로 돌아온다(voyage.ts)
+    this.body.rotation.y = heading;
+    // 속도를 배 기준으로 분해: 앞으로 달리면 선수가 살짝 들리고, 옆으로 밀리면 기운다
+    const fwd = vx * Math.sin(heading) + vz * Math.cos(heading);
+    const lat = vx * Math.cos(heading) - vz * Math.sin(heading);
+    this.body.rotation.x = -fwd * 0.018;
+    this.body.rotation.z = lat * 0.03;
     this.body.scale.setScalar(bounceScale);
 
     // --- 부품 항해 연출 — 정박(drive 0)이면 전부 잠잠하다 ---

@@ -199,9 +199,8 @@ export class Game {
    */
   private async applyIdleGrowth(): Promise<void> {
     const parts = this.persisted.parts;
-    const free = maxSlots(parts, this.config.baseSlots) - usedSlots(parts);
     const offline = this.debugOfflineMs ?? this.gateway.offlineMs();
-    const growth = idleGrowth(offline, parts, free);
+    const growth = idleGrowth(offline, parts);
 
     for (const item of growth) {
       for (let i = 0; i < item.count; i++) {

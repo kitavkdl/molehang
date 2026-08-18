@@ -55,6 +55,7 @@ declare global {
       draw(tier: PartTier): Promise<void>;
       crewMultiplier(): number;
       voyage(active: boolean): void;
+      voyageState(): { heading: number; viewYaw: number; speed: number; hull: number };
       reset(): Promise<void>;
       tutorial(): void;
       sampleLuminance(): { mean: number; p10: number } | null;
@@ -265,6 +266,7 @@ function boot(): void {
       world.setVoyageMode(active);
     },
     () => world.voyageSpeed,
+    () => world.voyageHull,
   );
 
   // 암초 충돌 — 벌점은 없다. 대신 따개비가 붙는다(반드시 장착, 뽑기와 같은 유머)
@@ -501,6 +503,13 @@ function boot(): void {
       if (active) voyageUi.open();
       else voyageUi.close();
     },
+    // 항해 상태 덤프 — 회두·체이스 캠·손상을 자동 검증할 때 쓴다
+    voyageState: () => ({
+      heading: world.voyageHeading,
+      viewYaw: world.voyageViewYaw,
+      speed: world.voyageSpeed,
+      hull: world.voyageHull,
+    }),
     async reset() {
       clearPendingDraw();
       paint(await game.reset());

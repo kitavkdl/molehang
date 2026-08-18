@@ -2,7 +2,7 @@ import { bonusLabel } from '../game/crew.ts';
 import type { GameSnapshot } from '../game/game.ts';
 import { PART_TIERS, type PartTier } from '../game/parts.ts';
 import { locale, t } from '../i18n/index.ts';
-import { amount, duration } from './format.ts';
+import { amount, duration, slotsLabel } from './format.ts';
 
 /**
  * 상시 노출 UI. (CLAUDE.md §4)
@@ -109,7 +109,10 @@ export class Hud {
       this.lastTitleId = snap.title.id;
     }
     const noRoom = snap.slotsUsed >= snap.slotsMax;
-    this.titleSlots.textContent = t('ship.slots', { used: snap.slotsUsed, max: snap.slotsMax });
+    this.titleSlots.textContent = t('ship.slots', {
+      used: slotsLabel(snap.slotsUsed),
+      max: slotsLabel(snap.slotsMax),
+    });
     this.titleSlots.classList.toggle('is-full', noRoom);
 
     this.sheetChipLabel.textContent = t('sheet.title');

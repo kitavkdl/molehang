@@ -38,6 +38,14 @@ const ISLANDS: IslandSpec[] = [
   { azimuth: 21, distance: 265, width: 104, height: 23, peaks: 3, seed: 17 },
   { azimuth: 39, distance: 190, width: 54, height: 11, peaks: 2, seed: 23 },
   { azimuth: -44, distance: 215, width: 70, height: 16, peaks: 2, seed: 29 },
+  // 항해 체이스 캠이 뒤를 돌아볼 수 있다 — 수평선 나머지 방위에도 실루엣을 심는다
+  { azimuth: 68, distance: 250, width: 88, height: 18, peaks: 3, seed: 31 },
+  { azimuth: 104, distance: 210, width: 60, height: 12, peaks: 2, seed: 37 },
+  { azimuth: 143, distance: 280, width: 110, height: 21, peaks: 3, seed: 41 },
+  { azimuth: 178, distance: 230, width: 76, height: 14, peaks: 2, seed: 43 },
+  { azimuth: -147, distance: 260, width: 98, height: 19, peaks: 3, seed: 47 },
+  { azimuth: -108, distance: 200, width: 58, height: 12, peaks: 2, seed: 53 },
+  { azimuth: -73, distance: 290, width: 116, height: 17, peaks: 4, seed: 59 },
 ];
 
 const VERT = /* glsl */ `

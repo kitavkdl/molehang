@@ -84,7 +84,7 @@ export interface PartDef {
   kind: PartKind;
   tier: PartTier;
   zone: PartZone;
-  /** 차지하는 자리. 0이면 자리를 안 먹는다 */
+  /** 차지하는 자리. 0이면 자리를 안 먹는다. 따개비류는 0.1칸 — 거의 안 먹지만 티는 낸다 */
   slots: number;
   /**
    * 무게. 안 적으면 slots 와 같다. **항해에만** 영향을 준다 —
@@ -109,7 +109,7 @@ export interface PartDef {
 export const PART_INFO: Record<PartKind, PartDef> = {
   // ---------------------------------------------------------------- 작은 부품
   moss: {
-    kind: 'moss', tier: 'small', zone: 'side', slots: 1, production: 0, weight: 22, heft: 0,
+    kind: 'moss', tier: 'small', zone: 'side', slots: 0, production: 0, weight: 22, heft: 0,
     label: { ko: '이끼', en: 'Moss' },
     blurb: { ko: '아무것도 안 한다. 그냥 자란다.', en: 'Does nothing. Just grows.' },
   },
@@ -285,12 +285,12 @@ export const PART_INFO: Record<PartKind, PartDef> = {
 
   // ------------------------------------- 뽑기에서 안 나온다 — 항해·방치로만 (weight 0)
   barnacle: {
-    kind: 'barnacle', tier: 'small', zone: 'side', slots: 0, production: 0, weight: 0,
+    kind: 'barnacle', tier: 'small', zone: 'side', slots: 0.1, production: 0, weight: 0, heft: 0,
     label: { ko: '따개비', en: 'Barnacle' },
     blurb: { ko: '암초에 부딪힌 훈장. 떼는 법은 아무도 모른다.', en: 'A medal for hitting reefs. Non-removable.' },
   },
   gullNest: {
-    kind: 'gullNest', tier: 'small', zone: 'mast', slots: 0, production: 0.8, weight: 0,
+    kind: 'gullNest', tier: 'small', zone: 'mast', slots: 0.1, production: 0.8, weight: 0, heft: 0,
     label: { ko: '갈매기 둥지', en: 'Gull nest' },
     blurb: {
       ko: '오래 비운 사이 갈매기가 자리를 잡았다. 집세로 고철을 물어다 준다.',
@@ -298,7 +298,7 @@ export const PART_INFO: Record<PartKind, PartDef> = {
     },
   },
   ghost: {
-    kind: 'ghost', tier: 'medium', zone: 'deck', slots: 0, production: 0, light: 2, weight: 0, heft: 0,
+    kind: 'ghost', tier: 'medium', zone: 'deck', slots: 0.1, production: 0, light: 2, weight: 0, heft: 0,
     effects: { capacity: 0.2 },
     label: { ko: '유령 선원', en: 'Ghost sailor' },
     blurb: {
@@ -443,9 +443,10 @@ export function totalParts(inv: Inventory): number {
   return PART_KINDS.reduce((sum, k) => sum + inv[k], 0);
 }
 
-/** 지금 쓰고 있는 자리 */
+/** 지금 쓰고 있는 자리. 0.1칸 부품 때문에 소수가 나온다 — 부동소수점 먼지는 여기서 턴다 */
 export function usedSlots(inv: Inventory): number {
-  return PART_KINDS.reduce((sum, k) => sum + inv[k] * PART_INFO[k].slots, 0);
+  const sum = PART_KINDS.reduce((acc, k) => acc + inv[k] * PART_INFO[k].slots, 0);
+  return Math.round(sum * 10) / 10;
 }
 
 /** 선체 증축으로 늘어난 자리를 포함한 최대 자리 */
@@ -464,9 +465,11 @@ export function lightLevel(inv: Inventory): number {
   return PART_KINDS.reduce((sum, k) => sum + inv[k] * (PART_INFO[k].light ?? 0), 0);
 }
 
-/** 자리를 비우려고 뽑아낼 수 있는 부품 (자리를 차지하는 것만) */
+/** 자리를 비우려고 뽑아낼 수 있는 부품. 따개비류(weight 0)는 뗄 수 없다 — 그게 유머다 */
 export function removableKinds(inv: Inventory): PartKind[] {
-  return PART_KINDS.filter((k) => inv[k] > 0 && PART_INFO[k].slots > 0);
+  return PART_KINDS.filter(
+    (k) => inv[k] > 0 && PART_INFO[k].slots > 0 && PART_INFO[k].weight > 0,
+  );
 }
 
 // ---------------------------------------------------------------------------

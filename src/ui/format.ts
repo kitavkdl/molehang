@@ -4,6 +4,12 @@ export function amount(n: number): string {
   return Math.floor(n).toLocaleString('ko-KR');
 }
 
+/** 자리 수 — 따개비(0.1칸) 때문에 소수가 나올 수 있다. 정수면 소수점 없이 */
+export function slotsLabel(n: number): string {
+  const v = Math.round(n * 10) / 10;
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+
 /** "3시간 12분" / "45초" 처럼 사람이 읽는 길이 */
 export function duration(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000));

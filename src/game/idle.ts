@@ -9,8 +9,8 @@ import type { Inventory, PartKind } from './parts.ts';
  *
  * 규칙은 순수 계산이다. DOM·localStorage·three.js 를 import 하지 않는다.
  *
- *   - 12시간마다 이끼 +1 (한 번에 최대 2개). 이끼는 자리(1칸)를 먹으므로
- *     **빈자리에만 낀다** — 방치가 자리 초과라는 교착을 만들면 안 된다.
+ *   - 12시간마다 이끼 +1 (한 번에 최대 2개). 이끼는 자리를 아예 안 먹는다(0칸) —
+ *     방치가 자리 초과라는 교착을 만들 수 없다.
  *   - 24시간 넘게 비우면 갈매기가 둥지를 튼다 (한 번에 1개, 총 5개까지).
  *     둥지는 자리를 안 먹고 집세로 고철을 물어다 준다.
  *   - 72시간 넘게 비우면 유령 선원이 눌러앉는다. 유령은 배에 **한 명뿐**이다.
@@ -30,19 +30,13 @@ export interface IdleGrowth {
   count: number;
 }
 
-/**
- * 이번 귀환에서 저절로 붙을 부품들.
- * freeSlots 는 자리(slots)를 먹는 부품이 낄 수 있는 빈 칸 수다.
- */
-export function idleGrowth(offlineMs: number, inv: Inventory, freeSlots: number): IdleGrowth[] {
+/** 이번 귀환에서 저절로 붙을 부품들. */
+export function idleGrowth(offlineMs: number, inv: Inventory): IdleGrowth[] {
   const out: IdleGrowth[] = [];
   if (!Number.isFinite(offlineMs) || offlineMs < IDLE_MOSS_MS) return out;
 
-  const mossCount = Math.min(
-    MOSS_PER_RETURN,
-    Math.floor(offlineMs / IDLE_MOSS_MS),
-    Math.max(0, Math.floor(freeSlots)),
-  );
+  // 이끼는 자리 0칸이라 빈자리를 따지지 않는다
+  const mossCount = Math.min(MOSS_PER_RETURN, Math.floor(offlineMs / IDLE_MOSS_MS));
   if (mossCount > 0) out.push({ kind: 'moss', count: mossCount });
 
   if (offlineMs >= IDLE_NEST_MS && inv.gullNest < NEST_MAX) {

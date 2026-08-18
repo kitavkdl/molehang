@@ -118,9 +118,10 @@ const KO: Dict = {
 
   // 항해모드
   'voyage.toggle': '항해',
-  'voyage.hint': 'WASD·방향키, 또는 화면을 끌어서 항해하세요 — 암초를 조심!',
+  'voyage.hint': 'WASD·방향키·화면 끌기로 조향 — 뱃머리가 다 돌아야 최고 속도! 우클릭 드래그로 둘러보기',
   'voyage.done': '정박',
-  'voyage.hit': '암초에 긁혔다!',
+  'voyage.hit': '암초에 긁혔다! 선체가 상했다 — 정박하면 아문다',
+  'voyage.hullLabel': '선체',
   'voyage.speed': '{n}노트',
 
   // 방치 컨텐츠 — 돌아왔을 때 배에 생긴 일
@@ -287,9 +288,10 @@ const EN: Dict = {
   'scope.value': '{n}x',
 
   'voyage.toggle': 'Sail',
-  'voyage.hint': 'Sail with WASD/arrows, or drag the screen — mind the reefs!',
+  'voyage.hint': 'Steer with WASD/arrows or drag — full speed once the bow lines up! Right-drag to look around',
   'voyage.done': 'Drop anchor',
-  'voyage.hit': 'Scraped a reef!',
+  'voyage.hit': 'Scraped a reef! Hull damaged — anchoring mends it',
+  'voyage.hullLabel': 'Hull',
   'voyage.speed': '{n} kn',
 
   'idle.moss': 'Moss settled in while you were away (+{n})',

@@ -104,12 +104,13 @@ export class Foam {
     this.group.name = 'foam';
   }
 
-  update(state: SkyState, elapsed: number, seaX = 0, seaZ = 0): void {
+  update(state: SkyState, elapsed: number, seaX = 0, seaZ = 0, heading = BOAT_YAW): void {
     // 물결과 같이 오르내린다 — 항해 중에는 배가 있는 바다 좌표의 물결을 따라간다
     const y = sampleWave(seaX, seaZ, elapsed).height + 0.03;
     for (const mesh of this.meshes) {
       mesh.position.y = y;
-      mesh.rotation.y = BOAT_YAW + elapsed * (mesh.userData.spin as number);
+      // 링은 선체 비율로 길쭉하다 — 뱃머리가 돌면 같이 돌아야 배 밑에 남는다
+      mesh.rotation.y = heading + elapsed * (mesh.userData.spin as number);
       const pulse = 1 + 0.035 * Math.sin(elapsed * 1.4 + (mesh.userData.spin as number) * 30);
       mesh.scale.set(pulse, 1, pulse);
     }

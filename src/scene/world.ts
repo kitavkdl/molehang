@@ -206,6 +206,21 @@ export class World {
     return this.voyage.speed;
   }
 
+  /** 선체 내구도 0~1 — 항해 UI 의 게이지가 읽는다 */
+  get voyageHull(): number {
+    return this.voyage.hullIntegrity;
+  }
+
+  /** 뱃머리 방향 (라디안) — 자동 검증용 */
+  get voyageHeading(): number {
+    return this.voyage.heading;
+  }
+
+  /** 체이스 캠 각 (라디안) — 자동 검증용 */
+  get voyageViewYaw(): number {
+    return this.voyage.viewYaw;
+  }
+
   /** 부품 효과(엔진·돛·외륜)에서 오는 항해 속도 보너스 */
   setVoyageSpeed(bonus: number): void {
     this.voyage.speedBonus = bonus;
@@ -319,12 +334,20 @@ export class World {
     this.islands.update(this.state);
     this.clouds.update(this.state, dt);
     this.birds.update(this.state, this.elapsed);
-    this.boat.update(this.elapsed, dt, seaX, seaZ, this.voyage.vx, this.voyage.vz);
+    this.boat.update(
+      this.elapsed,
+      dt,
+      seaX,
+      seaZ,
+      this.voyage.vx,
+      this.voyage.vz,
+      this.voyage.heading,
+    );
     this.avatars.update(this.elapsed);
-    this.shadow.update(this.elapsed, seaX, seaZ);
-    this.foam.update(this.state, this.elapsed, seaX, seaZ);
+    this.shadow.update(this.elapsed, seaX, seaZ, this.voyage.heading);
+    this.foam.update(this.state, this.elapsed, seaX, seaZ, this.voyage.heading);
     this.wake.update(this.state, this.elapsed, dt, seaX, seaZ, this.voyage.vx, this.voyage.vz);
-    this.motes.update(this.elapsed, dt, this.boat.collectTarget);
+    this.motes.update(this.elapsed, dt, this.boat.collectTarget, seaX, seaZ);
 
     const framing = this.telescope.framing();
     const zoom = this.telescope.zoom;
@@ -344,8 +367,19 @@ export class World {
     const px = this.telescope.offsetX;
     const py = this.telescope.offsetY;
 
-    this.camera.position.set(sway + px, framing.height + lift + py + follow, framing.distance);
-    this.target.set(px, framing.targetY + py + follow, 0);
+    // 항해 체이스 캠 — 카메라 자리와 시점을 배(원점) 둘레로 같이 돌린다.
+    // 정박해 있으면 viewYaw 가 0 으로 풀려 §4.1 기본 구도 그대로다.
+    const yaw = this.voyage.viewYaw;
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const camX = sway + px;
+    const camZ = framing.distance;
+    this.camera.position.set(
+      camX * cy + camZ * sy,
+      framing.height + lift + py + follow,
+      -camX * sy + camZ * cy,
+    );
+    this.target.set(px * cy, framing.targetY + py + follow, -px * sy);
     this.camera.lookAt(this.target);
     this.sky.mesh.position.copy(this.camera.position);
 

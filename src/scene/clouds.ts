@@ -48,13 +48,16 @@ function rng(seed: number): () => number {
   };
 }
 
-const SPAN = 460;
-
 export class Clouds {
   readonly group = new Group();
   private readonly material: FlatMaterial;
   private readonly geometries: BufferGeometry[] = [];
-  private readonly items: Array<{ object: Object3D; speed: number }> = [];
+  private readonly items: Array<{
+    object: Object3D;
+    az: number;
+    depth: number;
+    angSpeed: number;
+  }> = [];
 
   constructor(count = 18) {
     // 색은 매 프레임 시간대에 맞춰 갈아끼운다 — 여기 값은 첫 프레임용
@@ -83,9 +86,18 @@ export class Clouds {
       const scale = low ? 3.4 + random() * 3.6 : 1.6 + random() * 2.4;
 
       cloud.scale.setScalar(scale);
-      cloud.position.set((random() - 0.5) * SPAN, skyY(depth, elevation), -depth);
+      // 항해 체이스 캠이 사방을 볼 수 있게 됐다 — 구름도 배를 중심으로 한
+      // 원 위에 심는다. 한쪽에만 깔면 뒤돌아본 하늘이 텅 빈다
+      const az = random() * Math.PI * 2;
+      cloud.position.set(Math.sin(az) * depth, skyY(depth, elevation), -Math.cos(az) * depth);
 
-      this.items.push({ object: cloud, speed: (low ? 0.5 : 1.1) + random() * 1.4 });
+      this.items.push({
+        object: cloud,
+        az,
+        depth,
+        // 원둘레를 따라 흐른다 — 겉보기 속도가 예전 직선 표류와 비슷하게
+        angSpeed: ((low ? 0.5 : 1.1) + random() * 1.4) / depth,
+      });
       this.group.add(cloud);
     }
 
@@ -96,8 +108,9 @@ export class Clouds {
     this.material.setColor(state.cloud);
 
     for (const item of this.items) {
-      item.object.position.x += item.speed * dt;
-      if (item.object.position.x > SPAN / 2) item.object.position.x -= SPAN;
+      item.az += item.angSpeed * dt;
+      item.object.position.x = Math.sin(item.az) * item.depth;
+      item.object.position.z = -Math.cos(item.az) * item.depth;
     }
   }
 

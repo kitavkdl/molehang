@@ -20,7 +20,7 @@ import {
 } from '../game/parts.ts';
 import { locale, t } from '../i18n/index.ts';
 import { THEME_IDS, themeName, type ThemeId } from '../style/themes.ts';
-import { amount, duration, relative, timestamp } from './format.ts';
+import { amount, duration, relative, slotsLabel, timestamp } from './format.ts';
 import { afterPaint } from './paint.ts';
 
 /**
@@ -140,7 +140,10 @@ export class LogSheet {
     // --- 지금 이 배 ---
     this.shipName.textContent = snap.title.name[loc];
     this.shipHint.textContent = t('sheet.condition', { hint: snap.title.hint[loc] });
-    this.shipSlots.textContent = t('ship.slots', { used: snap.slotsUsed, max: snap.slotsMax });
+    this.shipSlots.textContent = t('ship.slots', {
+      used: slotsLabel(snap.slotsUsed),
+      max: slotsLabel(snap.slotsMax),
+    });
     const ratio = snap.slotsMax > 0 ? Math.min(1, snap.slotsUsed / snap.slotsMax) : 0;
     this.slotFill.style.transform = `scaleX(${ratio.toFixed(3)})`;
     this.slotFill.classList.toggle('is-full', snap.slotsUsed >= snap.slotsMax);
@@ -346,8 +349,8 @@ function partRow(kind: PartKind, count: number, loc: 'ko' | 'en'): HTMLLIElement
   rate.className = 'part-row__rate';
   rate.textContent =
     def.production > 0
-      ? `+${(def.production * count).toFixed(1)}/s · ${def.slots * count}`
-      : `— · ${def.slots * count}`;
+      ? `+${(def.production * count).toFixed(1)}/s · ${slotsLabel(def.slots * count)}`
+      : `— · ${slotsLabel(def.slots * count)}`;
 
   right.append(n, rate);
   li.append(left, right);

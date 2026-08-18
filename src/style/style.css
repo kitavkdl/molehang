@@ -580,8 +580,13 @@ body {
 }
 
 .wallet__icon {
-  font-size: 12px;
+  display: inline-flex;
+  align-self: center;
   color: var(--mh-role-accent);
+}
+
+.wallet__icon svg {
+  display: block;
 }
 
 .wallet__amount {
@@ -1563,6 +1568,43 @@ body {
   font-weight: 700;
   line-height: 1.5;
   color: var(--mh-role-ink);
+}
+
+/* 항해 선체 내구도 게이지 — 암초에 긁히면 줄고, 정박하면 다시 찬다 */
+.hull {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.hull__label {
+  font-size: 11px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--mh-role-ink) 72%, transparent);
+}
+
+.hull__bar {
+  display: block;
+  width: 96px;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mh-role-ink) 14%, transparent);
+  overflow: hidden;
+}
+
+.hull__fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mh-role-gauge);
+  transform-origin: left center;
+  transition: transform 240ms ease, background-color 240ms ease;
+}
+
+.hull__fill.is-low {
+  background: var(--mh-role-accentDeep);
 }
 
 .arrange-bar__actions {

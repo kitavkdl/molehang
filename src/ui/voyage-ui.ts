@@ -14,6 +14,8 @@ export class VoyageUi {
   private readonly bar = must('voyage-bar');
   private readonly hint = must('voyage-hint');
   private readonly speedEl = must('voyage-speed');
+  private readonly hullLabel = must('voyage-hull-label');
+  private readonly hullFill = must('voyage-hull-fill');
   private readonly doneBtn = must('voyage-done');
   private readonly dock = document.querySelector<HTMLElement>('.dock');
   private readonly stock = must('stock');
@@ -25,6 +27,7 @@ export class VoyageUi {
   constructor(
     private readonly onChange: (active: boolean) => void,
     private readonly speedOf: () => number = () => 0,
+    private readonly hullOf: () => number = () => 1,
   ) {
     this.toggle.addEventListener('click', () => this.set(!this.active));
     this.doneBtn.addEventListener('click', () => this.set(false));
@@ -46,6 +49,7 @@ export class VoyageUi {
     this.toggle.textContent = t('voyage.toggle');
     this.doneBtn.textContent = t('voyage.done');
     this.hint.textContent = t('voyage.hint');
+    this.hullLabel.textContent = t('voyage.hullLabel');
     this.lastLabel = '';
   }
 
@@ -74,6 +78,10 @@ export class VoyageUi {
       this.lastLabel = label;
       this.speedEl.textContent = label;
     }
+    // 선체 내구도 — 암초에 긁힐 때마다 줄어드는 게 눈에 보여야 "손상"이 컨텐츠가 된다
+    const hull = Math.max(0, Math.min(1, this.hullOf()));
+    this.hullFill.style.transform = `scaleX(${hull.toFixed(3)})`;
+    this.hullFill.classList.toggle('is-low', hull < 0.4);
   };
 }
 
