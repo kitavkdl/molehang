@@ -44,6 +44,8 @@ const KO: Dict = {
   'gacha.cantAfford': '고철이 부족해요',
   'gacha.equip': '장착하기',
   'gacha.replace': '{name} 빼고 장착',
+  'gacha.statSlots': '자리',
+  'gacha.statRate': '생산',
 
   // 기록 시트
   'sheet.title': '항해 기록',
@@ -75,6 +77,40 @@ const KO: Dict = {
   'crew.me': '나',
   'crew.sailing': '항해 중',
   'crew.giftFrom': '{name}의 수거',
+  'crew.joinPrompt': '친구에게 받은 6자리 초대 코드를 입력하세요',
+  'crew.copyFallback': '이 링크를 친구에게 보내세요',
+  'crew.badCode': '코드가 올바르지 않아요. 6자리를 다시 확인해 주세요.',
+
+  'log.first': '첫 수거',
+  'log.gathered': '{t} 모음',
+
+  // 튜토리얼
+  'tutorial.next': '다음',
+  'tutorial.start': '시작하기',
+  'tutorial.skip': '건너뛰기',
+  'tutorial.welcome.title': '몰래항에 온 걸 환영해요',
+  'tutorial.welcome.body':
+    '수업이나 회의가 지루한 동안, 이 바다에서는 고철이 알아서 쌓입니다. 할 일은 가끔 들러 수거하는 것뿐이에요.',
+  'tutorial.idle.title': '고철은 저절로 쌓여요',
+  'tutorial.idle.body':
+    '창을 닫아 두어도 시간은 흐릅니다. 왼쪽의 "초당 +N"이 지금 버는 속도예요. 다만 상한이 있어서, 가득 차면 더는 쌓이지 않습니다.',
+  'tutorial.collect.title': '가득 차기 전에 수거',
+  'tutorial.collect.body':
+    '넘친 고철은 그냥 사라집니다. 수거한 고철은 지갑으로 들어가고, 그 고철로 부품을 뽑아요.',
+  'tutorial.draw.title': '부품은 뽑기로',
+  'tutorial.draw.body':
+    '작은·중간·대형 세 가지 뽑기가 있어요. 등급이 높을수록 비싸지만 생산량이 훨씬 큽니다. 돌림판이 멈추면 나온 부품은 **반드시** 장착됩니다.',
+  'tutorial.space.title': '자리가 모자랍니다',
+  'tutorial.space.body':
+    '이게 이 게임의 유일한 고민이에요. 배에 붙일 자리는 한정돼 있고, 큰 부품일수록 자리를 많이 먹습니다. 자리가 없는데 뽑으면, 무엇을 뽑아낼지 그 자리에서 골라야 해요.',
+  'tutorial.crew.title': '친구와 같이 켜 두면',
+  'tutorial.crew.body':
+    '초대 코드로 선단을 만들면 같이 접속해 있는 동안 축적이 빨라지고, 친구가 수거할 때마다 나에게도 고철이 떨어집니다.',
+
+  // 토스트
+  'toast.installed': '장착',
+  'toast.replaced': '{name} 빼고 장착',
+  'toast.newTitle': '새 칭호',
 
   // 공통
   'common.close': '닫기',
@@ -111,6 +147,8 @@ const EN: Dict = {
   'gacha.cantAfford': 'Not enough scrap',
   'gacha.equip': 'Bolt it on',
   'gacha.replace': 'Remove {name} & install',
+  'gacha.statSlots': 'Space',
+  'gacha.statRate': 'Rate',
 
   'sheet.title': 'Logbook',
   'sheet.statLifetime': 'Total scrap',
@@ -140,6 +178,38 @@ const EN: Dict = {
   'crew.me': 'You',
   'crew.sailing': 'Sailing',
   'crew.giftFrom': "{name}'s haul",
+  'crew.joinPrompt': 'Enter the 6-character invite code',
+  'crew.copyFallback': 'Send this link to your friend',
+  'crew.badCode': "That code isn't right. Check the 6 characters.",
+
+  'log.first': 'First collect',
+  'log.gathered': 'gathered over {t}',
+
+  'tutorial.next': 'Next',
+  'tutorial.start': 'Start',
+  'tutorial.skip': 'Skip',
+  'tutorial.welcome.title': 'Welcome to Molehang',
+  'tutorial.welcome.body':
+    'While class or the meeting drags on, scrap piles up out here on its own. All you do is drop by and collect it.',
+  'tutorial.idle.title': 'Scrap piles up by itself',
+  'tutorial.idle.body':
+    'Time passes even with the tab closed. The "+N/s" on the left is your current rate. There is a cap though — once full, nothing more accumulates.',
+  'tutorial.collect.title': 'Collect before it overflows',
+  'tutorial.collect.body':
+    'Overflow is simply lost. Collected scrap goes into your wallet, and you spend it drawing parts.',
+  'tutorial.draw.title': 'Parts come from draws',
+  'tutorial.draw.body':
+    'Small, medium and large draws. Higher tiers cost more but produce far more. When the wheel stops, whatever it landed on gets bolted on — no take-backs.',
+  'tutorial.space.title': 'Space is what runs out',
+  'tutorial.space.body':
+    'This is the one real decision here. Your hull has limited space, and bigger parts eat more of it. Draw with no room left and you must choose, right then, what to rip off.',
+  'tutorial.crew.title': 'Better with friends online',
+  'tutorial.crew.body':
+    'Make a crew with an invite code: while you are online together the rate goes up, and every time a crewmate collects, some scrap lands on you too.',
+
+  'toast.installed': 'installed',
+  'toast.replaced': 'swapped for {name}',
+  'toast.newTitle': 'New title',
 
   'common.close': 'Close',
   'common.cancel': 'Cancel',

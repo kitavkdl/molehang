@@ -99,6 +99,8 @@ export interface SkyState {
   starIntensity: number;
   /** 바다 위 해/달 반사 길의 세기 */
   glintIntensity: number;
+  /** 0 = 밝음, 1 = 완전한 밤. 등불이 없으면 배가 여기 잠긴다 */
+  nightness: number;
   /** 조명 방향 */
   sunDir: Vector3;
   /** 하늘에 그려지는 해/달 원반 방향 (조명과 분리) */
@@ -127,6 +129,7 @@ function blank(): SkyState {
     hemiIntensity: 1,
     starIntensity: 0,
     glintIntensity: 0,
+    nightness: 0,
     sunDir: new Vector3(0, 1, 0),
     discDir: new Vector3(0, 1, 0),
   };
@@ -174,6 +177,9 @@ export function evaluateSky(hour: number, out: SkyState = blank()): SkyState {
   out.hemiIntensity = la.hemi + (lb.hemi - la.hemi) * t;
   out.starIntensity = la.star + (lb.star - la.star) * t;
   out.glintIntensity = la.glint + (lb.glint - la.glint) * t;
+  // 밤에만 1에 가까워진다 — 새벽·노을에는 살짝만
+  const nightOf = (p: Phase): number => (p === 'night' ? 1 : p === 'day' ? 0 : 0.18);
+  out.nightness = nightOf(from) + (nightOf(to) - nightOf(from)) * t;
 
   lerpDir(out.sunDir, PHASE_SUN_DIR[from], PHASE_SUN_DIR[to], t);
   lerpDir(out.discDir, PHASE_DISC_DIR[from], PHASE_DISC_DIR[to], t);

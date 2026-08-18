@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <meta name="color-scheme" content="light" />
-    <meta name="description" content="지루한 시간 동안 알아서 쌓이는 자원을 수거해 배를 키우는 유휴 게임" />
+    <meta name="description" content="지루한 시간 동안 알아서 쌓이는 고철을 수거해 배를 키우는 유휴 게임" />
     <title>몰래항</title>
   </head>
   <body>
@@ -20,88 +20,137 @@
           <div class="brand">몰래항</div>
           <button class="title-badge" id="title-badge" type="button">
             <span class="title-badge__name" id="title-name">떠다니는 뗏목</span>
-            <span class="title-badge__parts" id="title-parts">파츠 0</span>
+            <span class="title-badge__parts" id="title-slots">자리 0/8</span>
           </button>
         </div>
         <div class="topbar__right">
           <button class="chip chip--crew" id="crew-chip" type="button" aria-haspopup="dialog" hidden>
-            <span class="chip__crew-count" id="crew-count">1</span>
+            <span class="chip__crew-count" id="crew-count">선원 1</span>
             <span class="chip__crew-bonus" id="crew-bonus"></span>
           </button>
+          <button class="chip chip--lang" id="lang-toggle" type="button">EN</button>
           <button class="chip" id="open-sheet" type="button" aria-haspopup="dialog">
             <span class="chip__dot" aria-hidden="true"></span>
-            기록
+            <span id="sheet-chip-label">기록</span>
           </button>
         </div>
       </header>
 
-      <!-- 자원 -->
+      <!-- 미수거 고철 -->
       <div class="stock" id="stock">
         <div class="stock__row">
           <span class="stock__amount" id="stock-amount">0</span>
           <span class="stock__cap" id="stock-cap">/ 0</span>
         </div>
         <div class="stock__bar"><div class="stock__fill" id="stock-fill"></div></div>
-        <div class="stock__note" id="stock-note">모으는 중…</div>
+        <div class="stock__meta">
+          <span class="stock__rate" id="stock-rate">초당 +0.5</span>
+          <span class="stock__note" id="stock-note">모으는 중…</span>
+        </div>
       </div>
 
-      <!-- 토스트 -->
       <div class="toasts" id="toasts" aria-live="polite"></div>
 
-      <!-- 하단: 수거 버튼 하나 -->
+      <!-- 하단: 지갑 + 뽑기 + 수거 -->
       <footer class="dock">
+        <div class="wallet">
+          <span class="wallet__icon" aria-hidden="true">◆</span>
+          <span class="wallet__amount" id="wallet-amount">0</span>
+          <span class="wallet__label" id="wallet-label">고철</span>
+        </div>
+
+        <div class="draws" id="draws">
+          <button class="draw" id="draw-small" type="button" data-tier="small">
+            <span class="draw__name" id="draw-small-name">작은 부품</span>
+            <span class="draw__cost" id="draw-small-cost">60</span>
+          </button>
+          <button class="draw draw--medium" id="draw-medium" type="button" data-tier="medium">
+            <span class="draw__name" id="draw-medium-name">중간 부품</span>
+            <span class="draw__cost" id="draw-medium-cost">420</span>
+          </button>
+          <button class="draw draw--large" id="draw-large" type="button" data-tier="large">
+            <span class="draw__name" id="draw-large-name">대형 부품</span>
+            <span class="draw__cost" id="draw-large-cost">2600</span>
+          </button>
+        </div>
+
         <button class="collect" id="collect" type="button" disabled>
-          <span class="collect__label">수거</span>
+          <span class="collect__label" id="collect-label">수거</span>
           <span class="collect__sub" id="collect-sub">아직 모이는 중</span>
         </button>
       </footer>
     </div>
 
-    <!-- 아래에서 올라오는 시트 -->
+    <!-- 뽑기 돌림판 -->
+    <div class="scrim scrim--gacha" id="gacha-scrim" hidden></div>
+    <section class="gacha" id="gacha" role="dialog" aria-modal="true" hidden>
+      <h2 class="gacha__title" id="gacha-title">부품 뽑기</h2>
+      <p class="gacha__note" id="gacha-note">나온 부품은 반드시 장착됩니다</p>
+
+      <div class="wheel" id="wheel">
+        <div class="wheel__pointer" aria-hidden="true"></div>
+        <div class="wheel__disc" id="wheel-disc"></div>
+      </div>
+
+      <div class="gacha__result" id="gacha-result" hidden>
+        <div class="gacha__result-name" id="gacha-result-name"></div>
+        <div class="gacha__result-blurb" id="gacha-result-blurb"></div>
+        <div class="gacha__result-stats" id="gacha-result-stats"></div>
+      </div>
+
+      <div class="gacha__room" id="gacha-room" hidden>
+        <p class="gacha__room-lead" id="gacha-room-lead">자리가 부족해요. 뺄 부품을 고르세요.</p>
+        <ul class="gacha__room-list" id="gacha-room-list"></ul>
+      </div>
+
+      <div class="gacha__actions">
+        <button class="ghost-btn" id="gacha-close" type="button">닫기</button>
+        <button class="gacha__confirm" id="gacha-confirm" type="button" hidden>장착하기</button>
+      </div>
+    </section>
+
+    <!-- 기록 시트 -->
     <div class="scrim" id="scrim" hidden></div>
     <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="항해 기록" hidden>
       <div class="sheet__grip" id="sheet-grip"></div>
       <div class="sheet__head">
-        <h2 class="sheet__title">항해 기록</h2>
+        <h2 class="sheet__title" id="sheet-title">항해 기록</h2>
         <button class="sheet__close" id="close-sheet" type="button" aria-label="닫기">✕</button>
       </div>
 
       <div class="sheet__scroll">
         <div class="sheet__stats" id="sheet-stats"></div>
 
-        <h3 class="sheet__section">지금 이 배</h3>
+        <h3 class="sheet__section" id="sec-ship">지금 이 배</h3>
         <div class="ship-card">
           <div class="ship-card__name" id="ship-title-name">떠다니는 뗏목</div>
           <div class="ship-card__hint" id="ship-title-hint">시작은 다 이렇다</div>
+          <div class="ship-card__bar"><div class="ship-card__fill" id="slot-fill"></div></div>
+          <div class="ship-card__slots" id="ship-slots">자리 0/8</div>
         </div>
         <ul class="parts" id="parts"></ul>
 
-        <h3 class="sheet__section">선단 <span class="sheet__count" id="crew-size"></span></h3>
+        <h3 class="sheet__section" id="sec-crew">선단 <span class="sheet__count" id="crew-size"></span></h3>
         <div class="crew-card">
           <p class="crew-card__lead" id="crew-lead"></p>
           <ul class="crew-list" id="crew-list"></ul>
           <div class="crew-card__code">
-            <span class="crew-card__label">초대 코드</span>
+            <span class="crew-card__label" id="crew-code-label">초대 코드</span>
             <strong class="crew-card__value" id="crew-code">------</strong>
           </div>
           <div class="crew-card__actions">
             <button class="ghost-btn" id="crew-copy" type="button">초대 링크 복사</button>
             <button class="ghost-btn" id="crew-join" type="button">코드로 합류</button>
           </div>
-          <p class="crew-card__note">
-            지금은 <strong>같은 브라우저의 다른 탭·창</strong>끼리만 이어집니다.
-            다른 기기의 친구와 연결하려면 서버(Supabase) 연결이 필요해요.
-          </p>
+          <p class="crew-card__note" id="crew-note"></p>
         </div>
 
-        <h3 class="sheet__section">칭호 <span class="sheet__count" id="titles-count"></span></h3>
+        <h3 class="sheet__section" id="sec-titles">칭호 <span class="sheet__count" id="titles-count"></span></h3>
         <ul class="titles" id="titles"></ul>
 
-        <h3 class="sheet__section">수거 기록</h3>
+        <h3 class="sheet__section" id="sec-log">수거 기록</h3>
         <ul class="log" id="log"></ul>
-        <p class="log__empty" id="log-empty">
-          아직 수거한 적이 없어요.<br />수업이 지루해질 때쯤 다시 오세요.
-        </p>
+        <p class="log__empty" id="log-empty"></p>
 
         <button class="ghost-btn" id="replay-tutorial" type="button">튜토리얼 다시 보기</button>
       </div>

@@ -10,7 +10,7 @@ import { Motes } from '../fx/motes.ts';
 import { Birds } from './birds.ts';
 import { Boat } from './boat.ts';
 import { Clouds } from './clouds.ts';
-import { updateFlatLighting } from './flat-material.ts';
+import { setLampLight, updateFlatLighting } from './flat-material.ts';
 import { Foam } from './foam.ts';
 import { framingFor } from './framing.ts';
 import { Islands } from './islands.ts';
@@ -106,6 +106,11 @@ export class World {
   /** 인벤토리를 배에 반영 */
   setParts(inventory: Inventory, animateNew = false): void {
     this.boat.setParts(inventory, animateNew);
+  }
+
+  /** 배에 달린 등불 총량 — 밤에 배가 보이는 정도를 결정한다 */
+  setLight(level: number): void {
+    setLampLight(level);
   }
 
   /** 수거 연출: 결정들이 갑판 상자로 빨려 들어가고 배가 튄다 */

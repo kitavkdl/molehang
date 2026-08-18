@@ -1,17 +1,26 @@
-import { accrue, collectFrom } from './accrual.ts';
+import { accrue, capacityFor, collectFrom } from './accrual.ts';
 import { GAME_CONFIG, STORAGE_KEY, type GameConfig } from './config.ts';
 import type {
   CollectLogEntry,
   CollectOutcome,
+  DrawOutcome,
+  InstallOutcome,
   MolehangGateway,
   PersistedState,
 } from './gateway.ts';
 import {
+  PART_INFO,
+  PART_TIERS,
   emptyInventory,
-  rollParts,
+  gachaCost,
+  maxSlots,
+  productionPerSecond,
+  rollPart,
   sanitizeInventory,
   unlockedTitleIds,
+  usedSlots,
   type PartKind,
+  type PartTier,
 } from './parts.ts';
 
 /**
@@ -38,50 +47,29 @@ export class LocalGateway implements MolehangGateway {
   }
 
   async sync(now: number, multiplier = 1): Promise<PersistedState> {
+    const perSecond = this.perSecond();
     const result = accrue(
-      { lastAccruedAt: this.state.lastAccruedAt, stored: this.state.stored, now, multiplier },
+      {
+        lastAccruedAt: this.state.lastAccruedAt,
+        pending: this.state.pending,
+        now,
+        perSecond,
+        capacity: capacityFor(perSecond, this.config),
+        multiplier,
+      },
       this.config,
     );
-    this.state.stored = result.stored;
+    this.state.pending = result.pending;
     this.state.lastAccruedAt = now;
-    this.write();
-    return this.snapshot();
-  }
-
-  /** 친구 수거 배당 — 상한을 넘지 않게 얹는다 */
-  async receiveGift(
-    now: number,
-    resource: number,
-    part: PartKind | null,
-  ): Promise<PersistedState> {
-    await this.sync(now, 1);
-    this.state.stored = Math.min(this.config.capacity, this.state.stored + Math.max(0, resource));
-    if (part !== null) {
-      this.state.parts[part] += 1;
-      this.state.titles = [
-        ...new Set([...this.state.titles, ...unlockedTitleIds(this.state.parts)]),
-      ];
-    }
     this.write();
     return this.snapshot();
   }
 
   async collect(now: number, multiplier = 1): Promise<CollectOutcome> {
     await this.sync(now, multiplier);
-    const { taken, left } = collectFrom(this.state.stored, this.config);
+    const { taken, left } = collectFrom(this.state.pending, this.config);
 
-    if (taken <= 0) {
-      return { state: this.snapshot(), taken: 0, entry: null, gainedParts: [], newTitleId: null };
-    }
-
-    // 얻은 파츠는 고를 수 없다 — 전부 그대로 배에 붙는다
-    const gained: PartKind[] = rollParts(taken, this.config.capacity, this.rand);
-    for (const kind of gained) this.state.parts[kind] += 1;
-
-    const before = new Set(this.state.titles);
-    const nowUnlocked = unlockedTitleIds(this.state.parts);
-    const fresh = nowUnlocked.filter((id) => !before.has(id));
-    this.state.titles = [...new Set([...this.state.titles, ...nowUnlocked])];
+    if (taken <= 0) return { state: this.snapshot(), taken: 0, entry: null };
 
     const entry: CollectLogEntry = {
       id: `${now.toString(36)}-${Math.floor(this.rand() * 1e6).toString(36)}`,
@@ -89,10 +77,10 @@ export class LocalGateway implements MolehangGateway {
       amount: taken,
       total: this.state.lifetime + taken,
       sinceMs: this.state.lastCollectedAt === null ? null : now - this.state.lastCollectedAt,
-      parts: gained,
     };
 
-    this.state.stored = left;
+    this.state.pending = left;
+    this.state.scrap += taken;
     this.state.lifetime = entry.total;
     this.state.lastCollectedAt = now;
     this.state.log.unshift(entry);
@@ -101,18 +89,57 @@ export class LocalGateway implements MolehangGateway {
     }
     this.write();
 
+    return { state: this.snapshot(), taken, entry };
+  }
+
+  async draw(tier: PartTier, now: number): Promise<DrawOutcome> {
+    await this.sync(now, 1);
+    const cost = gachaCost(tier, this.state.pulls[tier]);
+    if (this.state.scrap < cost) {
+      return { state: this.snapshot(), drawn: null, needsRoom: false };
+    }
+
+    this.state.scrap -= cost;
+    this.state.pulls[tier] += 1;
+    const drawn = rollPart(tier, this.rand);
+    this.write();
+
+    const need = PART_INFO[drawn].slots;
+    const free = maxSlots(this.state.parts, this.config.baseSlots) - usedSlots(this.state.parts);
+    return { state: this.snapshot(), drawn, needsRoom: need > free };
+  }
+
+  async install(kind: PartKind, remove: PartKind | null, now: number): Promise<InstallOutcome> {
+    await this.sync(now, 1);
+
+    if (remove !== null && this.state.parts[remove] > 0) {
+      this.state.parts[remove] -= 1;
+    }
+    this.state.parts[kind] += 1;
+
+    const before = new Set(this.state.titles);
+    const nowUnlocked = unlockedTitleIds(this.state.parts);
+    const fresh = nowUnlocked.filter((id) => !before.has(id));
+    this.state.titles = [...new Set([...this.state.titles, ...nowUnlocked])];
+    this.write();
+
     return {
       state: this.snapshot(),
-      taken,
-      entry,
-      gainedParts: gained,
-      // 여러 개가 동시에 열리면 가장 희귀한(마지막) 것을 보여준다
+      installed: kind,
+      removed: remove,
       newTitleId: fresh.length > 0 ? fresh[fresh.length - 1]! : null,
     };
   }
 
+  async receiveGift(now: number, scrap: number): Promise<PersistedState> {
+    await this.sync(now, 1);
+    this.state.scrap += Math.max(0, Math.round(scrap));
+    this.write();
+    return this.snapshot();
+  }
+
   async log(limit = this.config.logLimit): Promise<CollectLogEntry[]> {
-    return this.state.log.slice(0, limit).map((e) => ({ ...e, parts: [...e.parts] }));
+    return this.state.log.slice(0, limit).map((e) => ({ ...e }));
   }
 
   async reset(): Promise<PersistedState> {
@@ -121,9 +148,16 @@ export class LocalGateway implements MolehangGateway {
     return this.snapshot();
   }
 
-  /** 데모/디버그 전용 — `?res=` / `?parts=` 처리에 쓴다 */
-  async debugSetStored(amount: number): Promise<PersistedState> {
-    this.state.stored = Math.max(0, Math.min(this.config.capacity, amount));
+  /** 데모/디버그 전용 */
+  async debugSetScrap(amount: number): Promise<PersistedState> {
+    this.state.scrap = Math.max(0, amount);
+    this.write();
+    return this.snapshot();
+  }
+
+  async debugSetPending(amount: number): Promise<PersistedState> {
+    const cap = capacityFor(this.perSecond(), this.config);
+    this.state.pending = Math.max(0, Math.min(cap, amount));
     this.state.lastAccruedAt = Date.now();
     this.write();
     return this.snapshot();
@@ -136,12 +170,17 @@ export class LocalGateway implements MolehangGateway {
     return this.snapshot();
   }
 
+  private perSecond(): number {
+    return productionPerSecond(this.state.parts, this.config.baseProduction);
+  }
+
   private snapshot(): PersistedState {
     return {
       ...this.state,
       parts: { ...this.state.parts },
+      pulls: { ...this.state.pulls },
       titles: [...this.state.titles],
-      log: this.state.log.map((e) => ({ ...e, parts: [...e.parts] })),
+      log: this.state.log.map((e) => ({ ...e })),
     };
   }
 
@@ -154,17 +193,19 @@ export class LocalGateway implements MolehangGateway {
       const parsed = JSON.parse(raw) as Partial<PersistedState>;
       return {
         lastAccruedAt: num(parsed.lastAccruedAt, now),
-        stored: num(parsed.stored, 0),
+        pending: num(parsed.pending, 0),
+        scrap: num(parsed.scrap, 0),
         lifetime: num(parsed.lifetime, 0),
         lastCollectedAt:
           typeof parsed.lastCollectedAt === 'number' && Number.isFinite(parsed.lastCollectedAt)
             ? parsed.lastCollectedAt
             : null,
         parts: sanitizeInventory(parsed.parts),
+        pulls: sanitizePulls(parsed.pulls),
         titles: Array.isArray(parsed.titles)
           ? parsed.titles.filter((t): t is string => typeof t === 'string')
           : [],
-        log: Array.isArray(parsed.log) ? parsed.log.filter(isEntry).map(normalizeEntry) : [],
+        log: Array.isArray(parsed.log) ? parsed.log.filter(isEntry) : [],
       };
     } catch {
       return fresh(now);
@@ -183,13 +224,26 @@ export class LocalGateway implements MolehangGateway {
 function fresh(now: number): PersistedState {
   return {
     lastAccruedAt: now,
-    stored: 0,
+    pending: 0,
+    scrap: 0,
     lifetime: 0,
     lastCollectedAt: null,
     parts: emptyInventory(),
+    pulls: { small: 0, medium: 0, large: 0 },
     titles: [],
     log: [],
   };
+}
+
+function sanitizePulls(raw: unknown): Record<PartTier, number> {
+  const out: Record<PartTier, number> = { small: 0, medium: 0, large: 0 };
+  if (typeof raw !== 'object' || raw === null) return out;
+  const src = raw as Record<string, unknown>;
+  for (const tier of PART_TIERS) {
+    const v = src[tier];
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) out[tier] = Math.floor(v);
+  }
+  return out;
 }
 
 function num(v: unknown, fallback: number): number {
@@ -200,11 +254,6 @@ function isEntry(v: unknown): v is CollectLogEntry {
   if (typeof v !== 'object' || v === null) return false;
   const e = v as Partial<CollectLogEntry>;
   return typeof e.id === 'string' && typeof e.at === 'number' && typeof e.amount === 'number';
-}
-
-/** 파츠 시스템 이전 저장본과의 호환 */
-function normalizeEntry(e: CollectLogEntry): CollectLogEntry {
-  return { ...e, parts: Array.isArray(e.parts) ? e.parts : [] };
 }
 
 function safeStorage(): Storage | null {

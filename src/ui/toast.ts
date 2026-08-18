@@ -1,36 +1,44 @@
 import type { CrewGift } from '../game/crew.ts';
-import { PART_INFO, type PartKind } from '../game/parts.ts';
-import type { ShipTitle } from '../game/parts.ts';
+import { PART_INFO, partLabel, type PartKind, type ShipTitle } from '../game/parts.ts';
+import { locale, t } from '../i18n/index.ts';
+import { amount } from './format.ts';
 
 /**
- * 수거 직후 뜨는 짧은 알림.
+ * 짧은 알림.
  *
- * "뭐가 붙었는지"를 즉시 보여주는 게 이 게임의 도파민이다.
- * 파츠는 한 줄로 묶고, 새 칭호는 따로 크게 띄운다.
+ * 뽑기 결과는 돌림판이 크게 보여 주므로, 여기서는 장착이 끝났다는 확인과
+ * 새 칭호·선단 배당처럼 "화면 밖에서 일어난 일"만 알린다.
  */
 export class Toasts {
   private readonly root = must('toasts');
 
-  parts(kinds: PartKind[]): void {
-    if (kinds.length === 0) return;
-
-    const counted = new Map<PartKind, number>();
-    for (const k of kinds) counted.set(k, (counted.get(k) ?? 0) + 1);
-
+  installed(kind: PartKind, removed: PartKind | null): void {
+    const loc = locale();
     const el = document.createElement('div');
     el.className = 'toast';
-    for (const [kind, n] of counted) {
-      const tag = document.createElement('span');
-      tag.className = 'toast__part';
-      tag.textContent = n > 1 ? `${PART_INFO[kind].label} ×${n}` : PART_INFO[kind].label;
-      el.append(tag);
-    }
+
+    const tag = document.createElement('span');
+    tag.className = 'toast__part';
+    tag.textContent = partLabel(kind, loc);
+    el.append(tag);
+
     const suffix = document.createElement('span');
     suffix.className = 'toast__suffix';
-    suffix.textContent = '장착';
+    suffix.textContent =
+      removed === null
+        ? t('toast.installed')
+        : t('toast.replaced', { name: partLabel(removed, loc) });
     el.append(suffix);
 
-    this.push(el, 2600);
+    const rate = PART_INFO[kind].production;
+    if (rate > 0) {
+      const gain = document.createElement('span');
+      gain.className = 'toast__gain';
+      gain.textContent = `+${rate.toFixed(1)}/s`;
+      el.append(gain);
+    }
+
+    this.push(el, 2800);
   }
 
   /** 친구 수거로 나에게 떨어진 몫 */
@@ -40,14 +48,11 @@ export class Toasts {
 
     const who = document.createElement('span');
     who.className = 'toast__label';
-    who.textContent = `${gift.fromName}의 수거`;
+    who.textContent = t('crew.giftFrom', { name: gift.fromName });
 
     const body = document.createElement('span');
     body.className = 'toast__gift-body';
-    body.textContent =
-      gift.part === null
-        ? `+${gift.resource}`
-        : `+${gift.resource} · ${PART_INFO[gift.part].label} 장착`;
+    body.textContent = `+${amount(gift.scrap)}`;
 
     el.append(who, body);
     this.push(el, 3200);
@@ -59,14 +64,22 @@ export class Toasts {
 
     const label = document.createElement('span');
     label.className = 'toast__label';
-    label.textContent = '새 칭호';
+    label.textContent = t('toast.newTitle');
 
     const name = document.createElement('strong');
     name.className = 'toast__name';
-    name.textContent = title.name;
+    name.textContent = title.name[locale()];
 
     el.append(label, name);
     this.push(el, 4200);
+  }
+
+  /** 고철 부족처럼 가벼운 거절 */
+  warn(message: string): void {
+    const el = document.createElement('div');
+    el.className = 'toast toast--warn';
+    el.textContent = message;
+    this.push(el, 2000);
   }
 
   private push(el: HTMLElement, ms: number): void {

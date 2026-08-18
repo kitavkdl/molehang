@@ -1,7 +1,5 @@
-import type { PartKind } from './parts.ts';
-
 /**
- * 선단(crew) — 친구와 같이 하면 빨라지고, 배가 더 이상해진다.
+ * 선단(crew) — 친구와 같이 하면 빨라진다.
  *
  * 설계 원칙 세 가지
  *  1. **혼자서도 완결된다.** 선단은 전부 덤이다. 혼자 하는 사람이 막히는 구간이 없어야 한다.
@@ -22,8 +20,6 @@ export const CREW_RATE_BONUS = 0.15;
 /** 친구가 수거할 때 나에게 떨어지는 배당 비율 */
 export const CREW_SHARE = 0.12;
 
-/** 친구의 수거 부품이 내 배에도 붙을 확률 */
-export const CREW_PART_CHANCE = 0.5;
 
 export interface CrewMember {
   id: string;
@@ -47,27 +43,21 @@ export function bonusLabel(presentCount: number): string {
   return pct > 0 ? `+${pct}%` : '';
 }
 
-/** 친구 수거 → 나에게 들어오는 것 */
+/**
+ * 친구 수거 → 나에게 들어오는 것.
+ *
+ * 예전에는 부품을 직접 얹어 줬지만, 부품은 이제 **자리를 먹는다**.
+ * 남이 내 자리를 말없이 차지하면 그건 선물이 아니라 사고다.
+ * 그래서 배당은 고철로만 준다 — 그 고철로 뭘 뽑을지는 내가 결정한다.
+ */
 export interface CrewGift {
-  /** 배당 자원 */
-  resource: number;
-  /** 같이 딸려 오는 부품 (없을 수도 있다) */
-  part: PartKind | null;
+  /** 배당 고철 */
+  scrap: number;
   fromName: string;
 }
 
-export function giftFromCollect(
-  fromName: string,
-  amount: number,
-  parts: readonly PartKind[],
-  rand: () => number = Math.random,
-): CrewGift {
-  const resource = Math.max(1, Math.round(amount * CREW_SHARE));
-  const part =
-    parts.length > 0 && rand() < CREW_PART_CHANCE
-      ? parts[Math.floor(rand() * parts.length)]!
-      : null;
-  return { resource, part, fromName };
+export function giftFromCollect(fromName: string, amount: number): CrewGift {
+  return { scrap: Math.max(1, Math.round(amount * CREW_SHARE)), fromName };
 }
 
 // ---------------------------------------------------------------------------

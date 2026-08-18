@@ -26,7 +26,8 @@ const DESKTOP = { width: 1440, height: 900 };
 const PHASE_SHOTS = [
   { name: 'day', phase: 'day', label: '낮', res: '420', parts: 'window*3,sail,barrel' },
   { name: 'dusk', phase: 'dusk', label: '노을', res: 'full', parts: 'engine*2,chimney*2,lantern*2' },
-  { name: 'night', phase: 'night', label: '밤', res: '150', parts: 'lantern*5,window*4' },
+  // 밤은 등불이 있는 배 — 등불 없는 배는 아래 night-dark 컷에서 따로 본다
+  { name: 'night', phase: 'night', label: '밤', res: '150', parts: 'lantern*4,beacon' },
   { name: 'dawn', phase: 'dawn', label: '새벽', res: '300', parts: 'moss*4,sail*2' },
 ];
 
@@ -158,6 +159,37 @@ async function main() {
       const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
       await page.screenshot({ path: path.join(OUT, 'cursed-ship.png') });
       check('cursed-ship', '괴선', probe, errors);
+      await context.close();
+    }
+
+    // --- 밤: 등불 없는 배 (어둠에 잠긴다) + 뽑기 돌림판 ---
+    {
+      const { page, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=night&res=150&parts=engine*2,moss*3'),
+      );
+      await page.screenshot({ path: path.join(OUT, 'night-dark.png') });
+      await context.close();
+    }
+    {
+      const { page, context } = await openScene(browser, MOBILE_CTX, url('phase=day&scrap=9000'));
+      await page.click('#draw-large');
+      await page.waitForTimeout(900);
+      await page.screenshot({ path: path.join(OUT, 'gacha-spin.png') });
+      await page.waitForTimeout(2200);
+      await page.screenshot({ path: path.join(OUT, 'gacha-result.png') });
+      await context.close();
+    }
+    {
+      const { page, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url('phase=day&scrap=99999&parts=engine*4'),
+      );
+      await page.click('#draw-medium');
+      await page.waitForTimeout(3000);
+      await page.screenshot({ path: path.join(OUT, 'gacha-room.png') });
       await context.close();
     }
 

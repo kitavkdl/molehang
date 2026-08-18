@@ -1,5 +1,11 @@
 import { CylinderGeometry, Group, Mesh, Object3D, Vector3, type BufferGeometry } from 'three';
-import { PART_KINDS, type Inventory, type PartKind } from '../game/parts.ts';
+import {
+  PART_INFO,
+  PART_KINDS,
+  PART_ZONES,
+  emptyInventory,
+  type Inventory,
+} from '../game/parts.ts';
 import { BOAT_COLORS, type PaletteKey } from '../style/palette.ts';
 import { flat, type FlatMaterial } from './flat-material.ts';
 import {
@@ -32,16 +38,9 @@ export class Boat {
   private readonly materials: FlatMaterial[] = [];
   private readonly geometries: BufferGeometry[] = [];
 
-  private readonly mounted: Record<PartKind, Object3D[]> = {
-    engine: [],
-    window: [],
-    cannon: [],
-    chimney: [],
-    sail: [],
-    moss: [],
-    lantern: [],
-    barrel: [],
-  };
+  private mounted: Object3D[] = [];
+  private previous: Inventory = emptyInventory();
+  private signature = '';
   /** 방금 붙어서 튀어 오르는 중인 파츠들 */
   private readonly popping: Array<{ object: Object3D; t: number; scale: number }> = [];
 
@@ -98,28 +97,41 @@ export class Boat {
   }
 
   /**
-   * 인벤토리를 배에 반영한다. 얻은 파츠는 **전부** 붙는다 — 12개면 12개 다.
+   * 인벤토리를 배에 반영한다.
+   *
+   * 자리 번호는 **구역 단위**로 매겨진다 — 같은 갑판을 굴뚝과 대포가 나눠 쓰므로
+   * 종류별로 세면 서로 겹친다. 그래서 구성이 바뀌면 그 구역을 다시 깐다.
+   *
    * @param animateNew 새로 붙는 파츠를 팝 애니메이션으로 등장시킬지
    */
   setParts(inventory: Inventory, animateNew = false): void {
-    for (const kind of PART_KINDS) {
-      const want = inventory[kind];
-      const list = this.mounted[kind];
+    const signature = PART_KINDS.map((k) => inventory[k]).join(',');
+    if (signature === this.signature) return;
 
-      while (list.length > want) {
-        const obj = list.pop();
-        if (obj !== undefined) this.rig.remove(obj);
-      }
-      while (list.length < want) {
-        const object = buildPart(kind, list.length);
-        this.rig.add(object);
-        list.push(object);
-        if (animateNew) {
-          this.popping.push({ object, t: 0, scale: object.scale.x });
-          object.scale.setScalar(0.01);
+    for (const obj of this.mounted) this.rig.remove(obj);
+    this.mounted = [];
+    this.popping.length = 0;
+
+    for (const zone of PART_ZONES) {
+      let index = 0;
+      for (const kind of PART_KINDS) {
+        if (PART_INFO[kind].zone !== zone) continue;
+        for (let i = 0; i < inventory[kind]; i++) {
+          const object = buildPart(kind, index);
+          index += 1;
+          this.rig.add(object);
+          this.mounted.push(object);
+          // 이번에 늘어난 개수만 팝으로 등장시킨다
+          if (animateNew && i >= this.previous[kind]) {
+            this.popping.push({ object, t: 0, scale: object.scale.x });
+            object.scale.setScalar(0.01);
+          }
         }
       }
     }
+
+    this.previous = { ...inventory };
+    this.signature = signature;
   }
 
   /** 파도 위에서 흔들린다 — 바다 셰이더와 같은 파형 함수를 공유 */

@@ -2,11 +2,19 @@ import type { Clock } from '../core/clock.ts';
 import { CREW_MAX, bonusLabel } from '../game/crew.ts';
 import type { GameSnapshot } from '../game/game.ts';
 import type { CollectLogEntry } from '../game/gateway.ts';
-import { PART_INFO, PART_KINDS, SHIP_TITLES } from '../game/parts.ts';
+import {
+  PART_INFO,
+  PART_KINDS,
+  SHIP_TITLES,
+  partBlurb,
+  partLabel,
+  type PartKind,
+} from '../game/parts.ts';
+import { locale, t } from '../i18n/index.ts';
 import { amount, duration, relative, timestamp } from './format.ts';
 
 /**
- * 아래에서 올라오는 시트 — 지금 이 배 / 칭호 / 수거 기록. (CLAUDE.md §4)
+ * 항해 기록 시트 — 지금 이 배 / 선단 / 칭호 / 수거 기록.
  * PC에서는 오른쪽에 붙는 패널이 된다(스타일만 다르고 DOM은 같다).
  */
 export class LogSheet {
@@ -20,6 +28,8 @@ export class LogSheet {
   private readonly titlesCount = must('titles-count');
   private readonly shipName = must('ship-title-name');
   private readonly shipHint = must('ship-title-hint');
+  private readonly shipSlots = must('ship-slots');
+  private readonly slotFill = must('slot-fill');
   private readonly closeBtn = must('close-sheet');
   private readonly grip = must('sheet-grip');
   private readonly replayBtn = must('replay-tutorial');
@@ -50,10 +60,9 @@ export class LogSheet {
       this.hide();
       onReplayTutorial();
     });
-
     this.crewCopy.addEventListener('click', () => void this.copyInvite());
     this.crewJoin.addEventListener('click', () => {
-      const input = globalThis.prompt('친구에게 받은 6자리 초대 코드를 입력하세요');
+      const input = globalThis.prompt(t('crew.joinPrompt'));
       if (input !== null && input.trim() !== '') this.crewActions.join(input);
     });
     document.addEventListener('keydown', (e) => {
@@ -65,7 +74,6 @@ export class LogSheet {
     await this.refresh();
     this.root.hidden = false;
     this.scrim.hidden = false;
-    // hidden 해제 직후 한 프레임 뒤에 클래스를 붙여야 트랜지션이 걸린다
     requestAnimationFrame(() => {
       this.root.classList.add('is-open');
       this.scrim.classList.add('is-open');
@@ -84,54 +92,41 @@ export class LogSheet {
     }, 260);
   }
 
-  private async copyInvite(): Promise<void> {
-    const link = this.crewActions.inviteLink();
-    try {
-      await navigator.clipboard.writeText(link);
-      this.flashCopy('복사했어요!');
-    } catch {
-      // 클립보드 권한이 없으면 링크를 직접 보여 준다
-      globalThis.prompt('이 링크를 친구에게 보내세요', link);
-    }
-  }
-
-  private flashCopy(text: string): void {
-    const original = '초대 링크 복사';
-    this.crewCopy.textContent = text;
-    globalThis.setTimeout(() => {
-      this.crewCopy.textContent = original;
-    }, 1600);
-  }
-
   async refresh(): Promise<void> {
     const entries = await this.load();
     const snap = this.snapshot();
     const now = this.clock.now();
+    const loc = locale();
 
     // --- 통계 ---
     this.stats.textContent = '';
     this.stats.append(
-      stat('누적 자원', amount(snap.lifetime)),
-      stat('수거', `${entries.length}회`),
-      stat('파츠', amount(snap.partCount)),
+      stat(t('sheet.statLifetime'), amount(snap.lifetime)),
+      stat(t('sheet.statCollects'), t('sheet.times', { n: entries.length })),
+      stat(t('sheet.statParts'), amount(snap.partCount)),
     );
 
     // --- 지금 이 배 ---
-    this.shipName.textContent = snap.title.name;
-    // 힌트는 "지금 파츠 수"가 아니라 "달성 조건"이다 — 상단 배지의 개수와 헷갈리지 않게 명시
-    this.shipHint.textContent = `달성 조건 · ${snap.title.hint}`;
+    this.shipName.textContent = snap.title.name[loc];
+    this.shipHint.textContent = t('sheet.condition', { hint: snap.title.hint[loc] });
+    this.shipSlots.textContent = t('ship.slots', { used: snap.slotsUsed, max: snap.slotsMax });
+    const ratio = snap.slotsMax > 0 ? Math.min(1, snap.slotsUsed / snap.slotsMax) : 0;
+    this.slotFill.style.transform = `scaleX(${ratio.toFixed(3)})`;
+    this.slotFill.classList.toggle('is-full', snap.slotsUsed >= snap.slotsMax);
 
     this.parts.textContent = '';
     const owned = PART_KINDS.filter((k) => snap.parts[k] > 0);
     if (owned.length === 0) {
       const li = document.createElement('li');
       li.className = 'parts__empty';
-      li.textContent = '아직 아무것도 안 붙었어요';
+      li.textContent = t('sheet.noParts');
       this.parts.append(li);
     } else {
-      for (const kind of owned) {
-        this.parts.append(partRow(PART_INFO[kind].label, snap.parts[kind], PART_INFO[kind].blurb));
-      }
+      // 생산량이 큰 것부터 — 무엇을 뺄지 판단할 때 이 순서가 제일 쓸모 있다
+      const sorted = [...owned].sort(
+        (a, b) => PART_INFO[b].production * snap.parts[b] - PART_INFO[a].production * snap.parts[a],
+      );
+      for (const kind of sorted) this.parts.append(partRow(kind, snap.parts[kind], loc));
     }
 
     // --- 선단 ---
@@ -139,67 +134,61 @@ export class LogSheet {
     this.crewCode.textContent = this.crewActions.code();
     this.crewLead.textContent =
       snap.crewSize > 1
-        ? `같이 있는 동안 축적 속도 ${bonusLabel(snap.crewSize)}. 선원이 수거하면 그 부품 하나가 내 배에도 붙어요.`
-        : '혼자서도 문제없지만, 친구가 합류하면 더 빨리 쌓이고 부품도 나눠 받아요.';
+        ? t('crew.leadTogether', { bonus: bonusLabel(snap.crewSize) })
+        : t('crew.leadSolo');
 
     this.crewList.textContent = '';
-    this.crewList.append(crewRow('나', snap.title.name, snap.partCount, true));
+    this.crewList.append(crewRow(t('crew.me'), snap.title.name[loc], snap.partCount, true));
     for (const m of snap.crew) {
-      this.crewList.append(crewRow(m.name, m.title, m.partCount, false));
+      this.crewList.append(crewRow(m.name, m.title === '' ? t('crew.sailing') : m.title, m.partCount, false));
     }
 
     // --- 칭호 ---
     const unlocked = new Set(snap.unlockedTitles);
     this.titlesCount.textContent = `${unlocked.size} / ${SHIP_TITLES.length}`;
     this.titles.textContent = '';
-    for (const t of SHIP_TITLES) {
-      const got = unlocked.has(t.id);
+    for (const title of SHIP_TITLES) {
+      const got = unlocked.has(title.id);
       const li = document.createElement('li');
       li.className = got ? 'title-row is-got' : 'title-row';
 
       const name = document.createElement('span');
       name.className = 'title-row__name';
-      name.textContent = got ? t.name : '???';
+      name.textContent = got ? title.name[loc] : '???';
 
       const hint = document.createElement('span');
       hint.className = 'title-row__hint';
-      hint.textContent = t.hint;
+      hint.textContent = title.hint[loc];
 
       li.append(name, hint);
-      if (t.id === snap.title.id) {
-        const now_ = document.createElement('span');
-        now_.className = 'title-row__now';
-        now_.textContent = '지금';
-        li.append(now_);
+      if (title.id === snap.title.id) {
+        const badge = document.createElement('span');
+        badge.className = 'title-row__now';
+        badge.textContent = t('sheet.now');
+        li.append(badge);
       }
       this.titles.append(li);
     }
 
     // --- 수거 기록 ---
     this.empty.hidden = entries.length > 0;
+    this.empty.textContent = t('sheet.empty');
     this.list.textContent = '';
     for (const entry of entries) this.list.append(logRow(entry, now));
   }
-}
 
-function crewRow(name: string, title: string, partCount: number, isSelf: boolean): HTMLLIElement {
-  const li = document.createElement('li');
-  li.className = isSelf ? 'crew-row is-self' : 'crew-row';
-
-  const who = document.createElement('span');
-  who.className = 'crew-row__name';
-  who.textContent = name;
-
-  const what = document.createElement('span');
-  what.className = 'crew-row__title';
-  what.textContent = title === '' ? '항해 중' : title;
-
-  const n = document.createElement('span');
-  n.className = 'crew-row__parts';
-  n.textContent = `파츠 ${partCount}`;
-
-  li.append(who, what, n);
-  return li;
+  private async copyInvite(): Promise<void> {
+    const link = this.crewActions.inviteLink();
+    try {
+      await navigator.clipboard.writeText(link);
+      this.crewCopy.textContent = t('crew.copied');
+      globalThis.setTimeout(() => {
+        this.crewCopy.textContent = t('crew.copy');
+      }, 1600);
+    } catch {
+      globalThis.prompt(t('crew.copyFallback'), link);
+    }
+  }
 }
 
 function stat(label: string, value: string): HTMLElement {
@@ -215,28 +204,69 @@ function stat(label: string, value: string): HTMLElement {
   return box;
 }
 
-function partRow(label: string, count: number, blurb: string): HTMLLIElement {
+function partRow(kind: PartKind, count: number, loc: 'ko' | 'en'): HTMLLIElement {
+  const def = PART_INFO[kind];
   const li = document.createElement('li');
   li.className = 'part-row';
 
   const left = document.createElement('div');
   left.className = 'part-row__text';
 
+  const head = document.createElement('div');
+  head.className = 'part-row__head';
+
   const name = document.createElement('span');
   name.className = 'part-row__name';
-  name.textContent = label;
+  name.textContent = partLabel(kind, loc);
+
+  const tier = document.createElement('span');
+  tier.className = `part-row__tier is-${def.tier}`;
+  tier.textContent = t(`gacha.${def.tier}`);
+
+  head.append(name, tier);
 
   const desc = document.createElement('span');
   desc.className = 'part-row__blurb';
-  desc.textContent = blurb;
+  desc.textContent = partBlurb(kind, loc);
 
-  left.append(name, desc);
+  left.append(head, desc);
+
+  const right = document.createElement('div');
+  right.className = 'part-row__nums';
 
   const n = document.createElement('span');
   n.className = 'part-row__count';
   n.textContent = `×${count}`;
 
-  li.append(left, n);
+  const rate = document.createElement('span');
+  rate.className = 'part-row__rate';
+  rate.textContent =
+    def.production > 0
+      ? `+${(def.production * count).toFixed(1)}/s · ${def.slots * count}`
+      : `— · ${def.slots * count}`;
+
+  right.append(n, rate);
+  li.append(left, right);
+  return li;
+}
+
+function crewRow(name: string, title: string, partCount: number, isSelf: boolean): HTMLLIElement {
+  const li = document.createElement('li');
+  li.className = isSelf ? 'crew-row is-self' : 'crew-row';
+
+  const who = document.createElement('span');
+  who.className = 'crew-row__name';
+  who.textContent = name;
+
+  const what = document.createElement('span');
+  what.className = 'crew-row__title';
+  what.textContent = title;
+
+  const n = document.createElement('span');
+  n.className = 'crew-row__parts';
+  n.textContent = t('ship.parts', { n: partCount });
+
+  li.append(who, what, n);
   return li;
 }
 
@@ -253,14 +283,10 @@ function logRow(entry: CollectLogEntry, now: number): HTMLLIElement {
 
   const ago = document.createElement('span');
   ago.className = 'log__ago';
-  const parts =
-    entry.parts.length > 0
-      ? entry.parts.map((p) => PART_INFO[p].label).join(' · ')
-      : '부품 없음';
   ago.textContent =
     entry.sinceMs === null
-      ? `첫 수거 · ${parts}`
-      : `${relative(entry.at, now)} · ${duration(entry.sinceMs)} 모음 · ${parts}`;
+      ? t('log.first')
+      : `${relative(entry.at, now)} · ${t('log.gathered', { t: duration(entry.sinceMs) })}`;
 
   left.append(time, ago);
 

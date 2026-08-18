@@ -9,12 +9,14 @@ import {
 } from './core/time-of-day.ts';
 import { GAME_CONFIG, STORAGE_KEY } from './game/config.ts';
 import { CrewSession } from './game/crew-session.ts';
-import { Game } from './game/game.ts';
+import { Game, type GameSnapshot } from './game/game.ts';
 import { LocalGateway } from './game/local-gateway.ts';
-import { PART_KINDS, type PartKind } from './game/parts.ts';
+import { PART_KINDS, type PartKind, type PartTier } from './game/parts.ts';
+import { applyStatic, locale, setLocale, t } from './i18n/index.ts';
 import { createCrewChannel } from './net/crew-channel.ts';
 import { World } from './scene/world.ts';
 import { PHASES, applyThemeVars, type Phase } from './style/palette.ts';
+import { GachaPanel } from './ui/gacha.ts';
 import { Hud } from './ui/hud.ts';
 import { LogSheet } from './ui/sheet.ts';
 import { Toasts } from './ui/toast.ts';
@@ -25,9 +27,11 @@ declare global {
     molehang?: {
       setHour(hour: number): void;
       setPhase(phase: Phase): void;
-      setStored(amount: number): Promise<void>;
+      setScrap(amount: number): Promise<void>;
+      setPending(amount: number): Promise<void>;
       addParts(kinds: PartKind[]): Promise<void>;
       collect(): Promise<void>;
+      draw(tier: PartTier): Promise<void>;
       crewMultiplier(): number;
       reset(): Promise<void>;
       tutorial(): void;
@@ -40,6 +44,7 @@ declare global {
 function boot(): void {
   // CSS 변수 주입이 첫 페인트보다 먼저 와야 한다
   applyThemeVars();
+  document.documentElement.lang = locale();
 
   const params = new URLSearchParams(globalThis.location.search);
   const canvas = document.getElementById('stage') as HTMLCanvasElement | null;
@@ -47,25 +52,24 @@ function boot(): void {
 
   const clock: Clock = new SystemClock();
 
-  // `?seat=` 은 저장소를 분리한다 — 같은 기기에서 친구 역할을 하나 더 띄워 보기 위한 것.
-  // 없으면 평소대로 하나의 세이브를 쓴다.
+  // `?seat=` 은 저장소를 분리한다 — 같은 기기에서 친구 역할을 하나 더 띄우기 위한 것
   const seat = params.get('seat');
   const storageKey = seat === null ? STORAGE_KEY : `${STORAGE_KEY}.${seat}`;
 
   const channel = createCrewChannel();
   const gateway = new LocalGateway(GAME_CONFIG, undefined, undefined, storageKey);
   const game = new Game(gateway, clock, GAME_CONFIG, channel);
-
   const crew = new CrewSession(channel, seat);
-
-  // 연출 시각: 기본은 **접속한 기기의 로컬 시각**, 디버그로만 고정 가능
-  const timeSource: TimeOfDaySource = resolveTimeSource(params, clock);
-  const world = new World(canvas, timeSource, {
-    probe: params.has('probe') || params.has('hour') || params.has('phase'),
-  });
 
   const toasts = new Toasts();
   const tutorial = new Tutorial();
+
+  const profileFrom = (snap: GameSnapshot) => ({
+    name: crew.displayName,
+    title: snap.title.name[locale()],
+    partCount: snap.partCount,
+  });
+
   const sheet = new LogSheet(
     clock,
     () => game.log(),
@@ -75,85 +79,104 @@ function boot(): void {
       code: () => crew.currentCode,
       inviteLink: () => crew.inviteLink(),
       join: (code) => {
-        const snap = game.snapshot();
-        if (crew.join(code, profileFrom(snap))) {
-          void sheet.refresh();
-        } else {
-          globalThis.alert('코드가 올바르지 않아요. 6자리를 다시 확인해 주세요.');
-        }
+        if (crew.join(code, profileFrom(game.snapshot()))) void sheet.refresh();
+        else toasts.warn(t('crew.badCode'));
       },
     },
   );
 
-  const profileFrom = (snap: ReturnType<typeof game.snapshot>) => ({
-    name: crew.displayName,
-    title: snap.title.name,
-    partCount: snap.partCount,
+  const gacha = new GachaPanel({
+    draw: async (tier) => {
+      const event = await game.draw(tier);
+      if (event === null) return null;
+      return { drawn: event.drawn, needsRoom: event.needsRoom, removable: event.removable };
+    },
+    install: async (kind, remove) => {
+      const outcome = await game.install(kind, remove);
+      if (outcome === null) return;
+      const snap = game.snapshot();
+      paint(snap);
+      // 새로 붙은 부품만 팝으로 등장
+      world.setParts(snap.parts, true);
+      world.playCollect();
+      toasts.installed(outcome.installed, outcome.removed);
+      const unlocked = game.titleById(outcome.newTitleId);
+      if (unlocked !== null) globalThis.setTimeout(() => toasts.title(unlocked), 420);
+      void sheet.refresh();
+    },
+    onCantAfford: () => toasts.warn(t('gacha.cantAfford')),
   });
+
   const hud = new Hud({
     onCollect: () => void onCollect(),
     onOpenLog: () => void sheet.show(),
+    onDraw: (tier) => void gacha.open(tier, game.snapshot()),
+    onToggleLang: () => {
+      setLocale(locale() === 'ko' ? 'en' : 'ko');
+      hud.invalidate();
+      paint(game.snapshot());
+      void sheet.refresh();
+    },
   });
+
+  const timeSource: TimeOfDaySource = resolveTimeSource(params, clock);
+  const world = new World(canvas, timeSource, {
+    probe: params.has('probe') || params.has('hour') || params.has('phase'),
+  });
+
+  function paint(snap: GameSnapshot): void {
+    hud.render(snap);
+    world.setFill(snap.fill);
+    world.setParts(snap.parts);
+    world.setLight(snap.light);
+    crew.update(profileFrom(snap));
+  }
 
   async function onCollect(): Promise<void> {
     const event = await game.collect();
     if (event === null) return;
-
     world.playCollect();
-    // 얻은 파츠는 전부 그 자리에서 배에 붙는다
-    world.setParts(event.snapshot.parts, true);
     hud.pulse();
-    hud.render(event.snapshot);
-    world.setFill(event.snapshot.fill);
-
-    toasts.parts(event.gainedParts);
-    if (event.newTitle !== null) {
-      globalThis.setTimeout(() => toasts.title(event.newTitle!), 420);
-    }
-  }
-
-  function paint(snap: ReturnType<typeof game.snapshot>): void {
-    hud.render(snap);
-    world.setFill(snap.fill);
-    world.setParts(snap.parts);
-    crew.update(profileFrom(snap));
+    paint(event.snapshot);
   }
 
   void (async () => {
     let snap = await game.start();
 
-    // 디버그: 보유량 강제 (`?res=full` / `?res=250`)
-    const res = params.get('res');
-    if (res !== null) {
-      const value = res === 'full' ? GAME_CONFIG.capacity : Number.parseFloat(res);
+    const scrap = params.get('scrap');
+    if (scrap !== null) {
+      const value = Number.parseFloat(scrap);
       if (Number.isFinite(value)) {
-        await game.debugSetStored(value);
+        await game.debugSetScrap(value);
         snap = game.snapshot();
       }
     }
 
-    // 디버그: 파츠 강제 (`?parts=engine*12,moss*4`)
+    const res = params.get('res');
+    if (res !== null) {
+      const value = res === 'full' ? snap.capacity : Number.parseFloat(res);
+      if (Number.isFinite(value)) {
+        await game.debugSetPending(value);
+        snap = game.snapshot();
+      }
+    }
+
     const parts = params.get('parts');
     if (parts !== null) {
       await game.debugAddParts(parseParts(parts));
       snap = game.snapshot();
     }
 
+    applyStatic();
     paint(snap);
     world.start();
     crew.start(params, profileFrom(snap));
 
-    // HUD 는 초당 4회만 갱신해도 충분하다 (렌더 루프와 분리)
     globalThis.setInterval(() => paint(game.snapshot()), 250);
 
     game.onCollect(() => void sheet.refresh());
-
-    // 친구가 수거하면 나에게도 자원과 부품이 떨어진다
     game.onGift((gift) => {
-      const s = game.snapshot();
-      paint(s);
-      if (gift.part !== null) world.setParts(s.parts, true);
-      world.playCollect();
+      paint(game.snapshot());
       toasts.gift(gift);
       void sheet.refresh();
     });
@@ -163,23 +186,25 @@ function boot(): void {
     window.__MOLEHANG_READY__ = true;
   })();
 
-  // 디버그 훅 — Playwright 스크린샷/밝기 검증이 사용한다
   window.molehang = {
-    setHour(hour: number) {
-      world.setTimeSource(new FixedTimeOfDay(hour));
-    },
-    setPhase(phase: Phase) {
-      world.setTimeSource(new FixedTimeOfDay(PHASE_ANCHOR_HOUR[phase]));
-    },
-    async setStored(value: number) {
-      await game.debugSetStored(value);
+    setHour: (hour) => world.setTimeSource(new FixedTimeOfDay(hour)),
+    setPhase: (phase) => world.setTimeSource(new FixedTimeOfDay(PHASE_ANCHOR_HOUR[phase])),
+    async setScrap(value) {
+      await game.debugSetScrap(value);
       paint(game.snapshot());
     },
-    async addParts(kinds: PartKind[]) {
+    async setPending(value) {
+      await game.debugSetPending(value);
+      paint(game.snapshot());
+    },
+    async addParts(kinds) {
       await game.debugAddParts(kinds);
       paint(game.snapshot());
     },
     collect: onCollect,
+    async draw(tier) {
+      await gacha.open(tier, game.snapshot());
+    },
     crewMultiplier: () => game.snapshot().crewMultiplier,
     async reset() {
       paint(await game.reset());
@@ -209,12 +234,10 @@ function resolveTimeSource(params: URLSearchParams, clock: Clock): TimeOfDaySour
     const value = Number.parseFloat(hour);
     if (Number.isFinite(value)) return new FixedTimeOfDay(value);
   }
-
   const phase = params.get('phase');
   if (phase !== null && (PHASES as readonly string[]).includes(phase)) {
     return new FixedTimeOfDay(PHASE_ANCHOR_HOUR[phase as Phase]);
   }
-
   // 기본값: 접속한 기기의 로컬 시각을 그대로 따라간다
   return new LocalTimeOfDay(clock);
 }

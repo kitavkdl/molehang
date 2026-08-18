@@ -19,6 +19,12 @@ const SHARED = {
   uHemiSky: { value: new Color(1, 1, 1) },
   uHemiGround: { value: new Color(1, 1, 1) },
   uPower: { value: 1 },
+  /** 0 = 평소, 1 = 완전한 밤. 배를 어둠에 잠기게 한다 */
+  uNight: { value: 0 },
+  /** 배에 달린 등불이 만드는 빛 (0~1). 어둠을 걷어낸다 */
+  uLamp: { value: 0 },
+  /** 밤에 물드는 색 */
+  uNightTint: { value: new Color(1, 1, 1) },
 };
 
 const VERT = /* glsl */ `
@@ -37,6 +43,9 @@ uniform vec3 uLightColor;
 uniform vec3 uHemiSky;
 uniform vec3 uHemiGround;
 uniform float uPower;
+uniform float uNight;
+uniform float uLamp;
+uniform vec3 uNightTint;
 
 varying vec3 vWorld;
 
@@ -55,6 +64,11 @@ void main() {
   vec3 c = uColor * band;
   c += uColor * uLightColor * 0.16 * uPower * step(0.42, lam);
   c = mix(c, uColor * hemi * 1.4, 0.15);
+
+  // 밤 — 등불이 없으면 배가 어둠에 잠긴다.
+  // 등불(uLamp)이 늘어날수록 원래 색을 되찾는다. 이게 등불을 다는 이유다.
+  float dark = uNight * (1.0 - uLamp);
+  c = mix(c, c * uNightTint * 0.3, dark);
 
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
@@ -95,4 +109,14 @@ export function updateFlatLighting(state: SkyState): void {
   SHARED.uHemiSky.value.copy(state.hemiSky);
   SHARED.uHemiGround.value.copy(state.hemiGround);
   SHARED.uPower.value = state.sunIntensity;
+  SHARED.uNight.value = state.nightness;
+  SHARED.uNightTint.value.copy(state.hemiGround);
+}
+
+/**
+ * 배에 달린 등불의 총량을 반영한다.
+ * 등불 0 → 밤에 배가 거의 안 보이고, 4개쯤이면 원래 색을 되찾는다.
+ */
+export function setLampLight(level: number): void {
+  SHARED.uLamp.value = Math.min(1, level / 4);
 }

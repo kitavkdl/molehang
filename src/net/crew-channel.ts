@@ -182,7 +182,7 @@ export class BroadcastCrewChannel implements CrewChannel {
     this.emitPresence();
 
     if (msg.type === 'collect') {
-      const gift = giftFromCollect(msg.name, msg.amount, msg.parts);
+      const gift = giftFromCollect(msg.name, msg.amount);
       for (const fn of this.giftListeners) fn(gift);
     }
   }
