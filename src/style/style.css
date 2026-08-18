@@ -709,6 +709,21 @@ body {
   animation: nudge 1.6s ease-in-out infinite;
 }
 
+/* 수거 요청이 서버를 도는 동안 — 죽은 버튼이 아니라 "일하는 중"으로 보이게 */
+.collect.is-working {
+  animation: working 0.9s ease-in-out infinite;
+}
+
+@keyframes working {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.985);
+  }
+}
+
 .collect.is-pulsing {
   animation: pop 0.34s ease-out;
 }

@@ -20,7 +20,7 @@ export class ArrangeUi {
   private picked: string | null = null;
   private settling = false;
 
-  constructor(handlers: { onChange: (active: boolean) => void; onReset: () => void }) {
+  constructor(private readonly handlers: { onChange: (active: boolean) => void; onReset: () => void }) {
     this.toggle.addEventListener('click', () => this.set(!this.active, handlers.onChange));
     this.doneBtn.addEventListener('click', () => this.set(false, handlers.onChange));
     this.resetBtn.addEventListener('click', handlers.onReset);
@@ -28,6 +28,11 @@ export class ArrangeUi {
 
   get isActive(): boolean {
     return this.active;
+  }
+
+  /** 다른 모드(항해)가 켜질 때 강제로 접는다 — 두 모드가 겹치면 안 된다 */
+  close(): void {
+    if (this.active) this.set(false, this.handlers.onChange);
   }
 
   /** 집은 부품 이름을 힌트에 띄운다 */

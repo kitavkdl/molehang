@@ -256,25 +256,37 @@ function boot(): void {
   world.onArrangeSettle((settling) => arrangeUi.showSettling(settling));
   world.onArrangeDrop((key, position) => void game.savePlacement(key, position));
 
-  const voyageUi = new VoyageUi((active) => world.setVoyageMode(active));
+  // 항해와 배치는 겹치지 않는다 — 평소엔 버튼이 서로 가려 못 겹치지만,
+  // 디버그 API(molehang.voyage)로 들어와도 상태가 꼬이지 않게 서로 접는다
+  const voyageUi = new VoyageUi((active) => {
+    if (active) arrangeUi.close();
+    world.setVoyageMode(active);
+  });
 
   // 암초 충돌 — 벌점은 없다. 대신 따개비가 붙는다(반드시 장착, 뽑기와 같은 유머)
   const BARNACLE_CHANCE = 0.45;
   const BARNACLE_MAX = 24;
+  let barnaclePending = false;
   world.onReefHit(() => {
     toasts.warn(t('voyage.hit'));
+    if (barnaclePending) return;
     if (Math.random() >= BARNACLE_CHANCE) return;
     if (game.snapshot().parts.barnacle >= BARNACLE_MAX) return;
+    barnaclePending = true;
     void (async () => {
-      const outcome = await game.install('barnacle', null);
-      if (outcome === null) return;
-      const snap = game.snapshot();
-      paint(snap);
-      world.setParts(snap.parts, true);
-      toasts.installed('barnacle', null);
-      const unlocked = game.titleById(outcome.newTitleId);
-      if (unlocked !== null) globalThis.setTimeout(() => toasts.title(unlocked), 420);
-      void sheet.refresh();
+      try {
+        const outcome = await game.install('barnacle', null);
+        if (outcome === null) return;
+        const snap = game.snapshot();
+        paint(snap);
+        world.setParts(snap.parts, true);
+        toasts.installed('barnacle', null);
+        const unlocked = game.titleById(outcome.newTitleId);
+        if (unlocked !== null) globalThis.setTimeout(() => toasts.title(unlocked), 420);
+        void sheet.refresh();
+      } finally {
+        barnaclePending = false;
+      }
     })();
   });
 
@@ -299,11 +311,16 @@ function boot(): void {
   }
 
   async function onCollect(): Promise<void> {
-    const event = await game.collect();
-    if (event === null) return;
-    world.playCollect();
-    hud.pulse();
-    paint(event.snapshot);
+    hud.setCollecting(true);
+    try {
+      const event = await game.collect();
+      if (event === null) return;
+      world.playCollect();
+      hud.pulse();
+      paint(event.snapshot);
+    } finally {
+      hud.setCollecting(false);
+    }
   }
 
   const account = new AccountPanel(

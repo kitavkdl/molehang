@@ -172,6 +172,64 @@ async function main() {
       await context.close();
     }
 
+    // 10) 닫기 직후 재열기 — hide() 의 지연 숨김 타이머가 새 판을 죽이면 안 된다
+    {
+      const { page, context } = await open(browser, 'phase=day&scrap=99999');
+      await page.click('#draw-small');
+      await page.waitForTimeout(3600); // 스핀 종료 + 결과
+      await page.click('#gacha-confirm'); // 장착 → hide 타이머 시작
+      await page.waitForTimeout(60);
+      await page.click('#draw-small'); // 240ms 안에 재열기
+      await page.waitForTimeout(500); // 옛 타이머(240ms)가 지나간 뒤
+      const alive = await page.evaluate(() => !document.getElementById('gacha').hidden);
+      await page.waitForTimeout(3200);
+      const result = await page.evaluate(
+        () => !document.getElementById('gacha-result').hidden,
+      );
+      console.log(`재열기 레이스: 판 생존=${alive} (true 여야 정상), 결과 표시=${result}`);
+      await context.close();
+    }
+
+    // 11) 수거 연타 — 한 번만 정산돼야 한다
+    // (수거 버튼은 가득 차면 상시 애니메이션이라 Playwright 클릭 대신 직접 dispatch)
+    {
+      const { page, context } = await open(browser, 'phase=day&res=full');
+      const cap = await page.evaluate(() => document.getElementById('stock-cap').textContent);
+      await page.evaluate(() => {
+        document.getElementById('collect').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        document.getElementById('collect').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        void window.molehang.collect(); // 세 번째 시도 (API 직통)
+      });
+      await page.waitForTimeout(900);
+      const wallet = await scrapOf(page);
+      console.log(`수거 연타: 상한 ${cap?.trim()} → 지갑 ${wallet} (상한 수치 1회분이어야 정상)`);
+      await context.close();
+    }
+
+    // 12) 시트·계정 닫고 바로 재열기 — 지연 숨김 타이머 생존 확인
+    {
+      const { page, context } = await open(browser, 'phase=day&res=200');
+      await page.click('#open-sheet');
+      await page.waitForTimeout(400);
+      await page.click('#close-sheet');
+      await page.waitForTimeout(60);
+      await page.click('#open-sheet');
+      await page.waitForTimeout(500);
+      const sheetAlive = await page.evaluate(() => !document.getElementById('sheet').hidden);
+      await page.click('#close-sheet');
+      await page.waitForTimeout(400);
+
+      await page.click('#account-chip');
+      await page.waitForTimeout(400);
+      await page.click('#account-close');
+      await page.waitForTimeout(60);
+      await page.click('#account-chip');
+      await page.waitForTimeout(500);
+      const accountAlive = await page.evaluate(() => !document.getElementById('account').hidden);
+      console.log(`재열기: 시트 생존=${sheetAlive}, 계정 생존=${accountAlive} (둘 다 true 여야 정상)`);
+      await context.close();
+    }
+
     // 9) 선단 아바타 — 두 탭이 같은 선단이면 갑판에 두 명이 선다
     {
       const context = await browser.newContext(MOBILE_CTX);

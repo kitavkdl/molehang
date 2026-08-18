@@ -101,6 +101,23 @@ export class Game {
   /** 디버그(`?away=`) — 오프라인 시간을 강제한다. null 이면 게이트웨이 값 */
   debugOfflineMs: number | null = null;
 
+  /**
+   * 게이트웨이 변이 직렬화 큐.
+   *
+   * 로그인 상태의 게이트웨이는 네트워크를 탄다 — 수거 연타, 수거와 선물 배당,
+   * 따개비 장착과 뽑기 장착이 **겹치면** 서로의 결과를 덮어쓴다
+   * (같은 pending 을 두 번 지갑에 넣거나, 마지막 push 가 이긴다).
+   * 상태를 바꾸는 호출은 전부 이 줄에 세워 한 번에 하나만 달리게 한다.
+   * 로컬 게이트웨이는 어차피 즉시 끝나서 줄 서는 비용이 없다.
+   */
+  private chain: Promise<unknown> = Promise.resolve();
+
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(task, task);
+    this.chain = run.catch(() => undefined);
+    return run;
+  }
+
   private readonly collectListeners = new Set<(e: CollectEvent) => void>();
   private readonly changeListeners = new Set<(s: GameSnapshot) => void>();
   private readonly giftListeners = new Set<(g: CrewGift) => void>();
@@ -167,7 +184,9 @@ export class Game {
 
   async flush(): Promise<void> {
     if (!this.ready) return;
-    this.persisted = await this.gateway.sync(this.clock.now(), this.multiplier());
+    await this.enqueue(async () => {
+      this.persisted = await this.gateway.sync(this.clock.now(), this.multiplier());
+    });
   }
 
   multiplier(): number {
@@ -252,7 +271,9 @@ export class Game {
 
   async collect(): Promise<CollectEvent | null> {
     if (!this.ready) return null;
-    const outcome = await this.gateway.collect(this.clock.now(), this.multiplier());
+    const outcome = await this.enqueue(() =>
+      this.gateway.collect(this.clock.now(), this.multiplier()),
+    );
     this.persisted = outcome.state;
 
     const snap = this.snapshot();
@@ -269,7 +290,9 @@ export class Game {
   /** 뽑기. 고철이 모자라면 null */
   async draw(tier: PartTier): Promise<DrawEvent | null> {
     if (!this.ready) return null;
-    const outcome = await this.gateway.draw(tier, this.clock.now(), this.multiplier());
+    const outcome = await this.enqueue(() =>
+      this.gateway.draw(tier, this.clock.now(), this.multiplier()),
+    );
     this.persisted = outcome.state;
     this.emitChange(this.snapshot());
     if (outcome.drawn === null) return null;
@@ -288,7 +311,9 @@ export class Game {
   /** 장착 확정. 자리가 모자랐다면 remove 로 하나 빼고 넣는다 */
   async install(kind: PartKind, remove: PartKind | null = null): Promise<InstallOutcome | null> {
     if (!this.ready) return null;
-    const outcome = await this.gateway.install(kind, remove, this.clock.now(), this.multiplier());
+    const outcome = await this.enqueue(() =>
+      this.gateway.install(kind, remove, this.clock.now(), this.multiplier()),
+    );
     this.persisted = outcome.state;
     this.emitChange(this.snapshot());
     return outcome;
@@ -297,7 +322,7 @@ export class Game {
   /** 테마 뽑기. null 이면 고철이 모자라거나(soldOut=false) 이미 다 모았다(true) */
   async drawTheme(): Promise<{ drawn: ThemeId | null; soldOut: boolean }> {
     if (!this.ready) return { drawn: null, soldOut: false };
-    const outcome = await this.gateway.drawTheme();
+    const outcome = await this.enqueue(() => this.gateway.drawTheme());
     this.persisted = outcome.state;
     this.emitChange(this.snapshot());
     return { drawn: outcome.drawn, soldOut: outcome.soldOut };
@@ -305,7 +330,7 @@ export class Game {
 
   async setTheme(id: ThemeId): Promise<void> {
     if (!this.ready) return;
-    this.persisted = await this.gateway.setTheme(id);
+    this.persisted = await this.enqueue(() => this.gateway.setTheme(id));
     this.emitChange(this.snapshot());
   }
 
@@ -322,17 +347,20 @@ export class Game {
   /** 끌어 놓은 자리를 저장한다 (드래그가 끝날 때마다) */
   async savePlacement(key: string, position: [number, number, number]): Promise<void> {
     if (!this.ready) return;
-    this.persisted = await this.gateway.setPlacements({
-      ...this.persisted.placements,
-      [key]: position,
-    });
+    // placements 는 큐 **안에서** 읽는다 — 앞선 저장이 끝난 최신 상태 위에 얹기 위해
+    this.persisted = await this.enqueue(() =>
+      this.gateway.setPlacements({
+        ...this.persisted.placements,
+        [key]: position,
+      }),
+    );
     this.emitChange(this.snapshot());
   }
 
   /** 전부 기본 격자 자리로 되돌린다 */
   async resetPlacements(): Promise<void> {
     if (!this.ready) return;
-    this.persisted = await this.gateway.setPlacements({});
+    this.persisted = await this.enqueue(() => this.gateway.setPlacements({}));
     this.emitChange(this.snapshot());
   }
 
@@ -395,7 +423,9 @@ export class Game {
 
   private async applyGift(gift: CrewGift): Promise<void> {
     if (!this.ready) return;
-    this.persisted = await this.gateway.receiveGift(this.clock.now(), gift.scrap, this.multiplier());
+    this.persisted = await this.enqueue(() =>
+      this.gateway.receiveGift(this.clock.now(), gift.scrap, this.multiplier()),
+    );
     this.emitChange(this.snapshot());
     for (const fn of this.giftListeners) fn(gift);
   }

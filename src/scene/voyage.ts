@@ -83,6 +83,10 @@ export class Voyage {
 
     globalThis.addEventListener('keydown', this.onKeyDown);
     globalThis.addEventListener('keyup', this.onKeyUp);
+    // W 를 누른 채 창을 옮기면 keyup 이 영영 안 온다 — 초점을 잃으면 키를 전부 놓는다.
+    // 안 그러면 배가 혼자 수평선까지 항해한다.
+    globalThis.addEventListener('blur', this.onRelease);
+    document.addEventListener('visibilitychange', this.onRelease);
     this.canvas.addEventListener('pointerdown', this.onDown);
     globalThis.addEventListener('pointermove', this.onMove);
     globalThis.addEventListener('pointerup', this.onUp);
@@ -92,6 +96,8 @@ export class Voyage {
   dispose(): void {
     globalThis.removeEventListener('keydown', this.onKeyDown);
     globalThis.removeEventListener('keyup', this.onKeyUp);
+    globalThis.removeEventListener('blur', this.onRelease);
+    document.removeEventListener('visibilitychange', this.onRelease);
     this.canvas.removeEventListener('pointerdown', this.onDown);
     globalThis.removeEventListener('pointermove', this.onMove);
     globalThis.removeEventListener('pointerup', this.onUp);
@@ -266,6 +272,14 @@ export class Voyage {
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
     this.keys.delete(e.code);
+  };
+
+  private readonly onRelease = (): void => {
+    if (document.visibilityState === 'visible' && document.hasFocus()) return;
+    this.keys.clear();
+    this.stickX = 0;
+    this.stickZ = 0;
+    this.pointerId = null;
   };
 
   private readonly onDown = (e: PointerEvent): void => {

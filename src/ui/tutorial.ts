@@ -5,6 +5,7 @@
  * 그래서 무엇이 저절로 일어나는지 / 무엇을 눌러야 하는지 / 왜 다시 와야 하는지 셋만 짚는다.
  */
 import { t } from '../i18n/index.ts';
+import { afterPaint } from './paint.ts';
 
 const SEEN_KEY = 'molehang.tutorial.v2';
 
@@ -59,7 +60,7 @@ export class Tutorial {
     this.index = 0;
     this.active = true;
     this.root.hidden = false;
-    requestAnimationFrame(() => {
+    afterPaint(() => {
       this.root.classList.add('is-open');
       this.render();
     });

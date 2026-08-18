@@ -10,6 +10,7 @@ import {
 } from '../game/parts.ts';
 import { locale, t } from '../i18n/index.ts';
 import { amount } from './format.ts';
+import { afterPaint } from './paint.ts';
 
 /**
  * 뽑기 돌림판.
@@ -177,7 +178,7 @@ export class GachaPanel {
   private show(): void {
     this.root.hidden = false;
     this.scrim.hidden = false;
-    requestAnimationFrame(() => {
+    afterPaint(() => {
       this.root.classList.add('is-open');
       this.scrim.classList.add('is-open');
     });
@@ -396,7 +397,9 @@ export class GachaPanel {
     this.root.classList.remove('is-open');
     this.scrim.classList.remove('is-open');
     globalThis.setTimeout(() => {
-      if (this.pending === null) {
+      // 닫는 사이에 새 뽑기가 시작됐다면(busy) 그 판을 숨기면 안 된다 —
+      // 고철은 이미 빠졌는데 화면만 사라지는 사고가 된다
+      if (this.pending === null && !this.busy) {
         this.root.hidden = true;
         this.scrim.hidden = true;
       }

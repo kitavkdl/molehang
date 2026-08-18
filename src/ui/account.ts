@@ -8,6 +8,7 @@ import {
   type ShipSummary,
 } from '../net/supabase-gateway.ts';
 import { amount } from './format.ts';
+import { afterPaint } from './paint.ts';
 
 /**
  * 계정 패널 — 게스트 / 코드 인증 / 배 목록.
@@ -68,6 +69,10 @@ export class AccountPanel {
   private readonly shipsHint = must('account-ships-hint');
 
   private email = '';
+  /** 패널이 지금 열려 있는가 — hide() 의 지연 숨김이 방금 다시 연 판을 죽이지 않게 */
+  private opened = false;
+  /** 코드 발송이 진행 중인가 — 보내기/다시 보내기/Enter 가 겹치면 메일이 두 번 간다 */
+  private sending = false;
 
   constructor(
     private readonly auth: Auth,
@@ -112,9 +117,10 @@ export class AccountPanel {
   }
 
   async open(): Promise<void> {
+    this.opened = true;
     this.root.hidden = false;
     this.scrim.hidden = false;
-    requestAnimationFrame(() => {
+    afterPaint(() => {
       this.root.classList.add('is-open');
       this.scrim.classList.add('is-open');
     });
@@ -123,9 +129,12 @@ export class AccountPanel {
   }
 
   hide(): void {
+    this.opened = false;
     this.root.classList.remove('is-open');
     this.scrim.classList.remove('is-open');
     globalThis.setTimeout(() => {
+      // 그 사이 다시 열렸으면 이 타이머는 손을 뗀다
+      if (this.opened) return;
       this.root.hidden = true;
       this.scrim.hidden = true;
     }, 240);
@@ -138,11 +147,16 @@ export class AccountPanel {
   }
 
   private async send(): Promise<void> {
+    // 버튼 셋(보내기·다시 보내기·Enter)이 같은 길로 들어온다 — 겹치면 메일이 두 번 간다
+    if (this.sending) return;
+    this.sending = true;
+
     const address = this.emailInput.value.trim() || this.email;
     this.sendBtn.disabled = true;
     this.guestHint.textContent = t('auth.sending');
 
     const result = await this.auth.sendCode(address);
+    this.sending = false;
     this.sendBtn.disabled = false;
 
     if (!result.ok) {

@@ -21,6 +21,7 @@ import {
 import { locale, t } from '../i18n/index.ts';
 import { THEME_IDS, themeName, type ThemeId } from '../style/themes.ts';
 import { amount, duration, relative, timestamp } from './format.ts';
+import { afterPaint } from './paint.ts';
 
 /**
  * 항해 기록 시트 — 지금 이 배 / 선단 / 칭호 / 수거 기록.
@@ -104,7 +105,7 @@ export class LogSheet {
     await this.refresh();
     this.root.hidden = false;
     this.scrim.hidden = false;
-    requestAnimationFrame(() => {
+    afterPaint(() => {
       this.root.classList.add('is-open');
       this.scrim.classList.add('is-open');
     });

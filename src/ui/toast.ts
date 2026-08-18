@@ -2,6 +2,7 @@ import type { CrewGift } from '../game/crew.ts';
 import { PART_INFO, partLabel, type PartKind, type ShipTitle } from '../game/parts.ts';
 import { locale, t } from '../i18n/index.ts';
 import { amount } from './format.ts';
+import { afterPaint } from './paint.ts';
 
 /**
  * 짧은 알림.
@@ -92,7 +93,7 @@ export class Toasts {
 
   private push(el: HTMLElement, ms: number): void {
     this.root.append(el);
-    requestAnimationFrame(() => el.classList.add('is-in'));
+    afterPaint(() => el.classList.add('is-in'));
     globalThis.setTimeout(() => {
       el.classList.remove('is-in');
       globalThis.setTimeout(() => el.remove(), 320);

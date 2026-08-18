@@ -35,6 +35,8 @@ export class Hud {
   private lastShown = -1;
   private lastTitleId = '';
   private lastCrewSize = -1;
+  /** 수거 요청이 게이트웨이(네트워크)를 도는 중 — 버튼이 죽은 척하지 않게 표시한다 */
+  private collecting = false;
 
   constructor(handlers: {
     onCollect: () => void;
@@ -77,7 +79,7 @@ export class Hud {
       : t('res.untilFull', { t: duration(snap.msUntilFull) });
     this.stockNote.classList.toggle('is-full', full);
 
-    this.collectBtn.disabled = !snap.canCollect;
+    this.collectBtn.disabled = !snap.canCollect || this.collecting;
     this.collectBtn.classList.toggle('is-full', full);
     this.collectLabel.textContent = t('res.collect');
     this.collectSub.textContent = snap.canCollect
@@ -126,6 +128,17 @@ export class Hud {
       }
     }
     this.lastCrewSize = snap.crewSize;
+  }
+
+  /**
+   * 수거 요청이 도는 동안 버튼을 잠그고 일하는 티를 낸다.
+   * 로그인 상태에선 수거가 서버를 타서 1~2초 걸린다 — 아무 반응 없는 버튼은
+   * "고장"으로 읽히고, 연타를 부른다.
+   */
+  setCollecting(active: boolean): void {
+    this.collecting = active;
+    this.collectBtn.classList.toggle('is-working', active);
+    if (active) this.collectBtn.disabled = true;
   }
 
   /** 수거 순간 버튼 피드백 */

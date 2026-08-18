@@ -41,13 +41,15 @@ export class VoyageUi {
 
   private set(active: boolean): void {
     this.active = active;
+    // onChange 가 먼저다 — 켤 때 배치 모드를 접는 쪽(main.ts)이 dock 을 되살리는데,
+    // 그 뒤에 우리가 숨겨야 최종 상태가 "항해 중 = dock 없음"으로 남는다
+    this.onChange(active);
     this.bar.hidden = !active;
     this.toggle.classList.toggle('is-on', active);
     // 항해 중에는 되돌릴 수 없는 버튼(수거·뽑기)을 화면에서 치운다
     if (this.dock !== null) this.dock.hidden = active;
     this.stock.hidden = active;
     this.hint.textContent = t('voyage.hint');
-    this.onChange(active);
   }
 }
 
