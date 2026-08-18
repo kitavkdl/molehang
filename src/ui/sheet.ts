@@ -11,6 +11,7 @@ import {
   type PartKind,
 } from '../game/parts.ts';
 import { locale, t } from '../i18n/index.ts';
+import { THEME_IDS, themeName, type ThemeId } from '../style/themes.ts';
 import { amount, duration, relative, timestamp } from './format.ts';
 
 /**
@@ -39,6 +40,12 @@ export class LogSheet {
   private readonly crewCode = must('crew-code');
   private readonly crewCopy = must('crew-copy') as HTMLButtonElement;
   private readonly crewJoin = must('crew-join');
+  private readonly themeCount = must('theme-count');
+  private readonly themeLead = must('theme-lead');
+  private readonly themeList = must('theme-list') as HTMLUListElement;
+  private readonly themeDraw = must('theme-draw') as HTMLButtonElement;
+  private readonly themeDrawLabel = must('theme-draw-label');
+  private readonly themeCostEl = must('theme-cost');
 
   private open = false;
 
@@ -52,7 +59,12 @@ export class LogSheet {
       inviteLink: () => string;
       join: (code: string) => void;
     },
+    private readonly themeActions: {
+      draw: () => void;
+      select: (id: ThemeId) => void;
+    },
   ) {
+    this.themeDraw.addEventListener('click', () => themeActions.draw());
     this.closeBtn.addEventListener('click', () => this.hide());
     this.scrim.addEventListener('click', () => this.hide());
     this.grip.addEventListener('click', () => this.hide());
@@ -127,6 +139,31 @@ export class LogSheet {
         (a, b) => PART_INFO[b].production * snap.parts[b] - PART_INFO[a].production * snap.parts[a],
       );
       for (const kind of sorted) this.parts.append(partRow(kind, snap.parts[kind], loc));
+    }
+
+    // --- 바다 테마 ---
+    this.themeCount.textContent = `${snap.themes.length} / ${THEME_IDS.length}`;
+    this.themeLead.textContent =
+      snap.themesLeft > 0 ? t('theme.lead') : t('theme.allOwned');
+    this.themeCostEl.textContent = amount(snap.themeCost);
+    this.themeDrawLabel.textContent = t('theme.draw');
+    this.themeDraw.disabled = snap.themesLeft === 0 || snap.scrap < snap.themeCost;
+    this.themeCostEl.hidden = snap.themesLeft === 0;
+
+    this.themeList.textContent = '';
+    for (const id of THEME_IDS) {
+      const owned = snap.themes.includes(id);
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `theme-chip${id === snap.theme ? ' is-active' : ''}${owned ? '' : ' is-locked'}`;
+      btn.disabled = !owned;
+      btn.textContent = owned ? themeName(id, loc) : '???';
+      btn.addEventListener('click', () => {
+        if (owned && id !== snap.theme) this.themeActions.select(id);
+      });
+      li.append(btn);
+      this.themeList.append(li);
     }
 
     // --- 선단 ---

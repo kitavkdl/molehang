@@ -1,3 +1,4 @@
+import type { ThemeId } from '../style/themes.ts';
 import type { Inventory, PartKind, PartTier } from './parts.ts';
 
 /**
@@ -38,6 +39,12 @@ export interface PersistedState {
   placements: Record<string, [number, number, number]>;
   /** 한 번이라도 달성한 칭호 id */
   titles: string[];
+  /** 지금 쓰는 바다 테마 */
+  theme: ThemeId;
+  /** 뽑아서 갖고 있는 테마 */
+  themes: ThemeId[];
+  /** 테마 뽑기 횟수 — 가격 상승 */
+  themePulls: number;
   log: CollectLogEntry[];
 }
 
@@ -78,6 +85,10 @@ export interface MolehangGateway {
   install(kind: PartKind, remove: PartKind | null, now: number): Promise<InstallOutcome>;
   /** 부품을 끌어 놓은 자리를 저장. null 이면 기본 자리로 되돌린다 */
   setPlacements(placements: Record<string, [number, number, number]>): Promise<PersistedState>;
+  /** 테마 뽑기. drawn 이 null 이면 고철 부족이거나 이미 다 모았다 */
+  drawTheme(): Promise<{ state: PersistedState; drawn: ThemeId | null; soldOut: boolean }>;
+  /** 갖고 있는 테마로 바꾼다 */
+  setTheme(id: ThemeId): Promise<PersistedState>;
   /** 친구가 보내온 몫 */
   receiveGift(now: number, scrap: number): Promise<PersistedState>;
   /** 수거 기록 (최신순) */

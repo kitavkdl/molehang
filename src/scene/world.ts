@@ -19,6 +19,7 @@ import { Lights } from './lights.ts';
 import { Ocean } from './ocean.ts';
 import { ShadowBlob } from './shadow-blob.ts';
 import { Sky } from './sky.ts';
+import { phaseColorsFor, type ThemeId } from '../style/themes.ts';
 
 export interface LuminanceProbe {
   /** 화면 평균 휘도 0~1 */
@@ -48,6 +49,7 @@ export class World {
 
   private arrangeDrop: (key: string, position: [number, number, number]) => void = () => {};
   private arrangePick: (key: string | null) => void = () => {};
+  private themeColors = phaseColorsFor('classic');
 
   private elapsed = 0;
   private lastFrame = 0;
@@ -164,6 +166,11 @@ export class World {
     setLampLight(level);
   }
 
+  /** 바다 테마 — 같은 팔레트를 다르게 조합한 색표로 갈아끼운다 */
+  setTheme(id: ThemeId): void {
+    this.themeColors = phaseColorsFor(id);
+  }
+
   /** 수거 연출: 결정들이 갑판 상자로 빨려 들어가고 배가 튄다 */
   playCollect(): void {
     this.motes.burst(this.boat.collectTarget);
@@ -196,7 +203,7 @@ export class World {
   private frame(dt: number): void {
     this.elapsed += dt;
 
-    evaluateSky(this.timeSource.hourOfDay(), this.state);
+    evaluateSky(this.timeSource.hourOfDay(), this.state, this.themeColors);
 
     this.sky.update(this.state, this.elapsed);
     this.lights.update(this.state);

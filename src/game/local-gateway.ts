@@ -8,6 +8,7 @@ import type {
   MolehangGateway,
   PersistedState,
 } from './gateway.ts';
+import { isThemeId, rollTheme, themeCost, type ThemeId } from '../style/themes.ts';
 import {
   PART_INFO,
   PART_TIERS,
@@ -131,6 +132,29 @@ export class LocalGateway implements MolehangGateway {
     };
   }
 
+  async drawTheme(): Promise<{ state: PersistedState; drawn: ThemeId | null; soldOut: boolean }> {
+    const cost = themeCost(this.state.themePulls);
+    const remaining = rollTheme(this.state.themes, this.rand);
+    if (remaining === null) return { state: this.snapshot(), drawn: null, soldOut: true };
+    if (this.state.scrap < cost) return { state: this.snapshot(), drawn: null, soldOut: false };
+
+    this.state.scrap -= cost;
+    this.state.themePulls += 1;
+    this.state.themes = [...this.state.themes, remaining];
+    // 뽑은 테마는 바로 적용한다 — 뭘 뽑았는지 보여 주는 게 뽑기의 보상이다
+    this.state.theme = remaining;
+    this.write();
+    return { state: this.snapshot(), drawn: remaining, soldOut: false };
+  }
+
+  async setTheme(id: ThemeId): Promise<PersistedState> {
+    if (this.state.themes.includes(id)) {
+      this.state.theme = id;
+      this.write();
+    }
+    return this.snapshot();
+  }
+
   async setPlacements(
     placements: Record<string, [number, number, number]>,
   ): Promise<PersistedState> {
@@ -171,6 +195,13 @@ export class LocalGateway implements MolehangGateway {
     return this.snapshot();
   }
 
+  async debugGrantTheme(id: ThemeId): Promise<PersistedState> {
+    this.state.themes = [...new Set([...this.state.themes, id])];
+    this.state.theme = id;
+    this.write();
+    return this.snapshot();
+  }
+
   async debugAddParts(kinds: PartKind[]): Promise<PersistedState> {
     for (const kind of kinds) this.state.parts[kind] += 1;
     this.state.titles = [...new Set([...this.state.titles, ...unlockedTitleIds(this.state.parts)])];
@@ -193,6 +224,7 @@ export class LocalGateway implements MolehangGateway {
       parts: { ...this.state.parts },
       pulls: { ...this.state.pulls },
       placements: { ...this.state.placements },
+      themes: [...this.state.themes],
       titles: [...this.state.titles],
       log: this.state.log.map((e) => ({ ...e })),
     };
@@ -220,6 +252,9 @@ export class LocalGateway implements MolehangGateway {
         titles: Array.isArray(parsed.titles)
           ? parsed.titles.filter((t): t is string => typeof t === 'string')
           : [],
+        theme: isThemeId(parsed.theme) ? parsed.theme : 'classic',
+        themes: sanitizeThemes(parsed.themes),
+        themePulls: num(parsed.themePulls, 0),
         log: Array.isArray(parsed.log) ? parsed.log.filter(isEntry) : [],
       };
     } catch {
@@ -247,8 +282,17 @@ function fresh(now: number): PersistedState {
     pulls: { small: 0, medium: 0, large: 0 },
     placements: {},
     titles: [],
+    theme: 'classic',
+    themes: ['classic'],
+    themePulls: 0,
     log: [],
   };
+}
+
+/** 기본 테마는 언제나 갖고 있다 */
+export function sanitizeThemes(raw: unknown): ThemeId[] {
+  const owned = Array.isArray(raw) ? raw.filter(isThemeId) : [];
+  return [...new Set<ThemeId>(['classic', ...owned])];
 }
 
 /** 저장된 배치를 검사해 들인다 — 숫자 3개짜리 배열만 통과 */

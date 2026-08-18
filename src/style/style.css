@@ -1262,6 +1262,83 @@ body {
   box-shadow: none;
 }
 
+/* ---------------------------------------------------------------- 테마 */
+
+.theme-card {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--mh-role-gaugeTrack) 40%, transparent);
+}
+
+.theme-card__lead {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--mh-role-ink) 74%, var(--mh-role-surface));
+}
+
+.theme-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.theme-chip {
+  padding: 8px 13px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mh-role-surface) 88%, transparent);
+  color: var(--mh-role-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.theme-chip.is-active {
+  border-color: var(--mh-role-secret);
+  background: color-mix(in srgb, var(--mh-role-secret) 20%, var(--mh-role-surface));
+}
+
+.theme-chip.is-locked {
+  opacity: 0.4;
+  cursor: default;
+  letter-spacing: 0.1em;
+}
+
+.theme-card__draw {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 13px;
+  border: 0;
+  border-radius: 15px;
+  background: var(--mh-role-secret);
+  color: var(--mh-role-surface);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.theme-card__draw:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.theme-card__cost {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mh-role-surface) 30%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------------------------------------------------------------- 배치 모드 */
 
 .dock__row {

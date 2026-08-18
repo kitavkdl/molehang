@@ -193,6 +193,19 @@ async function main() {
       await context.close();
     }
 
+    // --- 테마 (같은 15색을 다르게 조합한 바다들) ---
+    for (const theme of ['emerald', 'ember', 'steel', 'abyssal']) {
+      const { page, errors, context } = await openScene(
+        browser,
+        MOBILE_CTX,
+        url(`phase=day&res=300&parts=sail,lantern*2&theme=${theme}`),
+      );
+      const probe = await page.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await page.screenshot({ path: path.join(OUT, `theme-${theme}.png`) });
+      check(`theme-${theme}`, '테마', probe, errors);
+      await context.close();
+    }
+
     // --- 배치 모드 ---
     {
       const { page, context } = await openScene(

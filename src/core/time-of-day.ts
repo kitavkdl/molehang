@@ -6,6 +6,7 @@ import {
   PHASE_SUN_DIR,
   col,
   type Phase,
+  type PhaseColors,
 } from '../style/palette.ts';
 import type { Clock } from './clock.ts';
 
@@ -151,25 +152,31 @@ function lerpDir(
  * 시각 → 씬 색/라이트 전체를 보간해 채운다.
  * 여기서 나오는 모든 Color 는 palette.ts 의 12색 사이 보간이다. 새 색은 만들지 않는다.
  */
-export function evaluateSky(hour: number, out: SkyState = blank()): SkyState {
+export function evaluateSky(
+  hour: number,
+  out: SkyState = blank(),
+  /** 테마가 갈아끼운 색표. 없으면 기본 팔레트 */
+  colors: Record<Phase, PhaseColors> = PHASE_COLORS,
+): SkyState {
   const { from, to, t } = resolvePhase(hour);
+  const pick = (p: Phase): PhaseColors => colors[p];
   out.hour = hour;
   out.from = from;
   out.to = to;
   out.t = t;
 
-  mixInto(out.skyTop, from, to, t, (p) => col(PHASE_COLORS[p].sky.top));
-  mixInto(out.skyMid, from, to, t, (p) => col(PHASE_COLORS[p].sky.mid));
-  mixInto(out.skyBottom, from, to, t, (p) => col(PHASE_COLORS[p].sky.bottom));
-  mixInto(out.oceanDeep, from, to, t, (p) => col(PHASE_COLORS[p].ocean.deep));
-  mixInto(out.oceanMid, from, to, t, (p) => col(PHASE_COLORS[p].ocean.mid));
-  mixInto(out.oceanCrest, from, to, t, (p) => col(PHASE_COLORS[p].ocean.crest));
-  mixInto(out.island, from, to, t, (p) => col(PHASE_COLORS[p].island));
-  mixInto(out.cloud, from, to, t, (p) => col(PHASE_COLORS[p].cloud));
-  mixInto(out.sunLight, from, to, t, (p) => col(PHASE_COLORS[p].sunLight));
-  mixInto(out.hemiSky, from, to, t, (p) => col(PHASE_COLORS[p].hemiSky));
-  mixInto(out.hemiGround, from, to, t, (p) => col(PHASE_COLORS[p].hemiGround));
-  mixInto(out.disc, from, to, t, (p) => col(PHASE_COLORS[p].disc));
+  mixInto(out.skyTop, from, to, t, (p) => col(pick(p).sky.top));
+  mixInto(out.skyMid, from, to, t, (p) => col(pick(p).sky.mid));
+  mixInto(out.skyBottom, from, to, t, (p) => col(pick(p).sky.bottom));
+  mixInto(out.oceanDeep, from, to, t, (p) => col(pick(p).ocean.deep));
+  mixInto(out.oceanMid, from, to, t, (p) => col(pick(p).ocean.mid));
+  mixInto(out.oceanCrest, from, to, t, (p) => col(pick(p).ocean.crest));
+  mixInto(out.island, from, to, t, (p) => col(pick(p).island));
+  mixInto(out.cloud, from, to, t, (p) => col(pick(p).cloud));
+  mixInto(out.sunLight, from, to, t, (p) => col(pick(p).sunLight));
+  mixInto(out.hemiSky, from, to, t, (p) => col(pick(p).hemiSky));
+  mixInto(out.hemiGround, from, to, t, (p) => col(pick(p).hemiGround));
+  mixInto(out.disc, from, to, t, (p) => col(pick(p).disc));
 
   const la = PHASE_LIGHT[from];
   const lb = PHASE_LIGHT[to];

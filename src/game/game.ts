@@ -2,6 +2,7 @@ import type { Clock } from '../core/clock.ts';
 import type { CrewChannel } from '../net/crew-channel.ts';
 import { accrue, capacityFor, fillRatio } from './accrual.ts';
 import { GAME_CONFIG, type GameConfig } from './config.ts';
+import { THEMES, THEME_IDS, themeCost, type ThemeId } from '../style/themes.ts';
 import { crewMultiplier, type CrewGift, type CrewMember } from './crew.ts';
 import type {
   CollectLogEntry,
@@ -54,6 +55,12 @@ export interface GameSnapshot {
   unlockedTitles: string[];
   /** 등급별 다음 뽑기 가격 */
   costs: Record<PartTier, number>;
+  /** 지금 쓰는 바다 테마 */
+  theme: ThemeId;
+  themes: ThemeId[];
+  themeCost: number;
+  /** 더 뽑을 테마가 남았는지 */
+  themesLeft: number;
 
   crew: CrewMember[];
   crewSize: number;
@@ -101,6 +108,9 @@ export class Game {
       pulls: { small: 0, medium: 0, large: 0 },
       placements: {},
       titles: [],
+      theme: 'classic',
+      themes: ['classic'],
+      themePulls: 0,
       log: [],
     };
   }
@@ -190,6 +200,12 @@ export class Game {
         medium: gachaCost('medium', this.persisted.pulls.medium),
         large: gachaCost('large', this.persisted.pulls.large),
       },
+      theme: this.persisted.theme,
+      themes: this.persisted.themes,
+      themeCost: themeCost(this.persisted.themePulls),
+      themesLeft: THEME_IDS.filter(
+        (id) => THEMES[id].weight > 0 && !this.persisted.themes.includes(id),
+      ).length,
 
       crew: this.crew,
       crewSize: this.crew.length + 1,
@@ -239,6 +255,31 @@ export class Game {
     this.persisted = outcome.state;
     this.emitChange(this.snapshot());
     return outcome;
+  }
+
+  /** 테마 뽑기. null 이면 고철이 모자라거나(soldOut=false) 이미 다 모았다(true) */
+  async drawTheme(): Promise<{ drawn: ThemeId | null; soldOut: boolean }> {
+    if (!this.ready) return { drawn: null, soldOut: false };
+    const outcome = await this.gateway.drawTheme();
+    this.persisted = outcome.state;
+    this.emitChange(this.snapshot());
+    return { drawn: outcome.drawn, soldOut: outcome.soldOut };
+  }
+
+  async setTheme(id: ThemeId): Promise<void> {
+    if (!this.ready) return;
+    this.persisted = await this.gateway.setTheme(id);
+    this.emitChange(this.snapshot());
+  }
+
+  /** 디버그: 테마를 뽑지 않고 지급 (`?theme=`) */
+  async debugGrantTheme(id: ThemeId): Promise<void> {
+    const gw = this.gateway as MolehangGateway & {
+      debugGrantTheme?: (t: ThemeId) => Promise<PersistedState>;
+    };
+    if (typeof gw.debugGrantTheme !== 'function') return;
+    this.persisted = await gw.debugGrantTheme(id);
+    this.emitChange(this.snapshot());
   }
 
   /** 끌어 놓은 자리를 저장한다 (드래그가 끝날 때마다) */

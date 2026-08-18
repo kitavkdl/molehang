@@ -21,6 +21,7 @@ import { AccountPanel, selectShip, selectedShipId } from './ui/account.ts';
 import { ArrangeUi } from './ui/arrange-ui.ts';
 import { World } from './scene/world.ts';
 import { PHASES, applyThemeVars, type Phase } from './style/palette.ts';
+import { THEMES, THEME_IDS, isThemeId, themeName } from './style/themes.ts';
 import { GachaPanel } from './ui/gacha.ts';
 import { Hud } from './ui/hud.ts';
 import { LogSheet } from './ui/sheet.ts';
@@ -37,6 +38,7 @@ declare global {
       addParts(kinds: PartKind[]): Promise<void>;
       setPlacement(key: string, position: [number, number, number]): Promise<void>;
       partScreenPositions(): Array<{ key: string; x: number; y: number }>;
+      drawTheme(): Promise<void>;
       collect(): Promise<void>;
       draw(tier: PartTier): Promise<void>;
       crewMultiplier(): number;
@@ -95,7 +97,51 @@ function boot(): void {
         else toasts.warn(t('crew.badCode'));
       },
     },
+    {
+      draw: () => void drawTheme(),
+      select: (id) => {
+        void (async () => {
+          await game.setTheme(id);
+          world.setTheme(id);
+          paint(game.snapshot());
+          await sheet.refresh();
+        })();
+      },
+    },
   );
+
+  /** 테마 뽑기 — 돌림판을 부품 뽑기와 공유한다 */
+  async function drawTheme(): Promise<void> {
+    const snap = game.snapshot();
+    if (snap.themesLeft === 0) {
+      toasts.warn(t('theme.soldOut'));
+      return;
+    }
+    if (snap.scrap < snap.themeCost) {
+      toasts.warn(t('gacha.cantAfford'));
+      return;
+    }
+
+    // 아직 없는 테마만 돌림판에 올린다
+    const pool = THEME_IDS.filter((id) => THEMES[id].weight > 0 && !snap.themes.includes(id));
+    sheet.hide();
+
+    await gacha.openTheme(
+      pool.map((id) => themeName(id, locale())),
+      async () => {
+        const result = await game.drawTheme();
+        if (result.drawn === null) return null;
+        world.setTheme(result.drawn);
+        paint(game.snapshot());
+        return {
+          label: themeName(result.drawn, locale()),
+          index: Math.max(0, pool.indexOf(result.drawn)),
+        };
+      },
+    );
+    // 테마를 고르던 자리로 돌려보낸다 — 뽑고 나면 대개 바꿔 껴 보고 싶어진다
+    await sheet.show();
+  }
 
   const gacha = new GachaPanel({
     draw: async (tier) => {
@@ -146,6 +192,7 @@ function boot(): void {
   world.onArrangeDrop((key, position) => void game.savePlacement(key, position));
 
   function paint(snap: GameSnapshot): void {
+    world.setTheme(snap.theme);
     hud.render(snap);
     world.setFill(snap.fill);
     world.setParts(snap.parts, false, snap.placements);
@@ -213,6 +260,13 @@ function boot(): void {
       snap = game.snapshot();
     }
 
+    // 디버그: 테마 강제 (`?theme=ember`)
+    const theme = params.get('theme');
+    if (theme !== null && isThemeId(theme)) {
+      await game.debugGrantTheme(theme);
+      snap = game.snapshot();
+    }
+
     applyStatic();
     arrangeUi.refreshLabels();
     paint(snap);
@@ -253,6 +307,11 @@ function boot(): void {
       paint(game.snapshot());
     },
     partScreenPositions: () => world.partScreenPositions(),
+    async drawTheme() {
+      const result = await game.drawTheme();
+      if (result.drawn !== null) world.setTheme(result.drawn);
+      paint(game.snapshot());
+    },
     collect: onCollect,
     async draw(tier) {
       await gacha.open(tier, game.snapshot());

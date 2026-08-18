@@ -11,7 +11,15 @@
   <img src="docs/shots/day.png" width="19%" alt="낮" />
   <img src="docs/shots/dusk.png" width="19%" alt="노을" />
   <img src="docs/shots/night.png" width="19%" alt="밤" />
-  <img src="docs/shots/cursed-ship.png" width="19%" alt="고철 요새" />
+  <img src="docs/shots/night-dark.png" width="19%" alt="등불 없는 밤" />
+</p>
+
+<p align="center">
+  <img src="docs/shots/gacha-result.png" width="19%" alt="부품 뽑기" />
+  <img src="docs/shots/gacha-room.png" width="19%" alt="자리가 부족할 때" />
+  <img src="docs/shots/arrange.png" width="19%" alt="배치 커스텀" />
+  <img src="docs/shots/theme-ember.png" width="19%" alt="잿불 해역" />
+  <img src="docs/shots/theme-emerald.png" width="19%" alt="에메랄드 만" />
 </p>
 
 <p align="center">
@@ -63,11 +71,22 @@ npm run dev
 > 인터페이스(`CrewChannel`)는 그대로 갈아끼울 수 있게 분리해 두었습니다.
 > 지금 해 보려면: 초대 링크를 복사해 새 탭에 `&seat=b` 를 붙여 열면 두 번째 선원이 됩니다.
 
+**바다 테마 6종**
+- 테마 뽑기로 해금. 같은 15색을 다르게 조합해서, 어떤 테마를 뽑아도 한 팔레트 안에 머문다
+- 푸른 바다 · 에메랄드 만 · 장밋빛 해협 · 잿불 해역 · 강철 해협 · 심해 항로
+
+**계정**
+- 게스트로 전부 즐길 수 있고, 로그인은 선택
+- 이메일 6자리 코드 인증 (매직 링크 아님)
+- 계정당 배 여러 척. 처음 로그인할 때 게스트로 키우던 배를 가져갈지 물어본다
+- 로그인 시 축적 정산은 서버(`sync_ship` RPC)가 `now()` 로 한다 — 기기 시계 조작 무효
+
 **그 외**
 - 첫 방문 튜토리얼 6스텝 (시트에서 다시 보기 가능)
+- 한국어 / English 전환 (기본 한국어)
 - 모바일 세로 / PC 가로 두 벌의 레이아웃 (PC에서는 기록이 오른쪽 사이드 패널)
 
-들어 있지 **않은** 것: 로그인, 수익화, 파츠 선택/판매 UI, 랭킹.
+들어 있지 **않은** 것: 수익화, 파츠 판매/강화 UI, 랭킹.
 
 ## 배포
 
@@ -129,7 +148,10 @@ UI·씬 코드는 `localStorage` 를 직접 만지지 않으므로 호출부는 
 | `phase` | `?phase=dusk` | `dawn` / `day` / `dusk` / `night` |
 | `res` | `?res=full` | 보유 자원 강제 |
 | `parts` | `?parts=engine*12,moss*8` | 파츠 강제 장착 |
+| `scrap` | `?scrap=9000` | 고철 잔고 강제 |
+| `theme` | `?theme=ember` | 테마 강제 해금·적용 |
 | `crew` | `?crew=ABCDEF` | 초대 코드로 선단 합류 |
+| `guest` | `?guest=1` | 로그인 무시하고 게스트로 시작 |
 | `seat` | `?seat=b` | 세이브 분리 — 같은 기기에서 친구 역할 하나 더 띄우기 |
 | `notutorial` | `?notutorial=1` | 튜토리얼 건너뛰기 |
 | `probe` | `?probe=1` | `window.molehang.sampleLuminance()` 활성화 |

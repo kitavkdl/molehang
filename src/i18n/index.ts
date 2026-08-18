@@ -84,6 +84,14 @@ const KO: Dict = {
   'log.first': '첫 수거',
   'log.gathered': '{t} 모음',
 
+  // 테마
+  'theme.draw': '테마 뽑기',
+  'theme.note': '바다 색이 통째로 바뀝니다',
+  'theme.lead': '같은 바다가 지겨우면 다른 바다로. 뽑은 테마는 언제든 바꿔 낄 수 있어요.',
+  'theme.allOwned': '테마를 전부 모았어요.',
+  'theme.applied': '바로 적용했어요',
+  'theme.soldOut': '더 뽑을 테마가 없어요',
+
   // 배치
   'arrange.toggle': '배치',
   'arrange.hint': '부품을 끌어서 옮기세요 — 각자 정해진 구역 안에서만 움직여요',
@@ -208,6 +216,13 @@ const EN: Dict = {
 
   'log.first': 'First collect',
   'log.gathered': 'gathered over {t}',
+
+  'theme.draw': 'Draw a sea',
+  'theme.note': 'The whole sea changes colour',
+  'theme.lead': 'Tired of this sea? Draw another. Switch between the ones you own any time.',
+  'theme.allOwned': "You've collected every sea.",
+  'theme.applied': 'Applied right away',
+  'theme.soldOut': 'No seas left to draw',
 
   'arrange.toggle': 'Arrange',
   'arrange.hint': 'Drag parts to move them — each one stays inside its own area',

@@ -62,6 +62,47 @@ export class GachaPanel {
     this.confirmBtn.addEventListener('click', () => void this.confirm());
   }
 
+  /**
+   * 테마 뽑기 — 부품과 같은 돌림판을 쓴다.
+   * 결과가 되돌릴 수 없는 건 아니라서(테마는 바꿔 낄 수 있다) 확정 버튼 없이 바로 닫힌다.
+   */
+  async openTheme(
+    labels: string[],
+    draw: () => Promise<{ label: string; index: number } | null>,
+  ): Promise<void> {
+    if (this.spinning || labels.length === 0) return;
+
+    this.pending = null;
+    this.result.hidden = true;
+    this.room.hidden = true;
+    this.confirmBtn.hidden = true;
+    this.closeBtn.disabled = true;
+    this.title.textContent = t('theme.draw');
+    this.note.textContent = t('theme.note');
+
+    this.renderWheel(labels);
+    this.root.hidden = false;
+    this.scrim.hidden = false;
+    requestAnimationFrame(() => {
+      this.root.classList.add('is-open');
+      this.scrim.classList.add('is-open');
+    });
+
+    const outcome = await draw();
+    if (outcome === null) {
+      this.closeBtn.disabled = false;
+      this.hide();
+      return;
+    }
+
+    await this.spinToIndex(labels.length, outcome.index);
+    this.result.hidden = false;
+    this.resultName.textContent = t('gacha.result', { name: outcome.label });
+    this.resultBlurb.textContent = t('theme.applied');
+    this.resultStats.textContent = '';
+    this.closeBtn.disabled = false;
+  }
+
   /** 등급 뽑기를 시작한다 */
   async open(tier: PartTier, snap: GameSnapshot): Promise<void> {
     if (this.spinning) return;
@@ -101,13 +142,18 @@ export class GachaPanel {
   }
 
   private buildWheel(tier: PartTier): void {
-    const pool = kindsOfTier(tier);
+    this.renderWheel(kindsOfTier(tier).map((kind) => partLabel(kind, locale())));
+  }
+
+  /** 라벨만 받아 돌림판을 그린다 (부품·테마 공용) */
+  private renderWheel(labels: string[]): void {
+    const pool = labels;
     this.disc.textContent = '';
     const step = 360 / pool.length;
 
     // 색 조각은 부채꼴로 잘라 내고(clip-path), 글자는 **자르지 않는 별도 층**에 올린다.
     // 글자를 조각 안에 넣으면 되돌려 세우는 순간 잘려 나간다.
-    pool.forEach((_kind, i) => {
+    pool.forEach((_label, i) => {
       const slice = document.createElement('div');
       slice.className = `wheel__slice wheel__slice--${i % 4}`;
       slice.style.transform = `rotate(${i * step}deg)`;
@@ -117,13 +163,13 @@ export class GachaPanel {
     // 글자는 중첩 회전 대신 **극좌표로 직접** 놓는다.
     // 회전 안에 회전을 넣으면 위치가 엉키고 잘려서, 계산으로 박아 두는 편이 확실하다.
     const radius = 34; // 원 반지름 대비 %
-    pool.forEach((kind, i) => {
+    pool.forEach((text, i) => {
       const rad = ((i * step + step / 2) * Math.PI) / 180;
       const label = document.createElement('span');
       label.className = 'wheel__label';
       label.style.left = `${50 + Math.sin(rad) * radius}%`;
       label.style.top = `${50 - Math.cos(rad) * radius}%`;
-      label.textContent = partLabel(kind, locale());
+      label.textContent = text;
       this.disc.append(label);
     });
   }
@@ -131,8 +177,11 @@ export class GachaPanel {
   /** 뽑힌 부품이 포인터 아래에 멈추도록 각도를 계산해 돌린다 */
   private spinTo(tier: PartTier, drawn: PartKind): Promise<void> {
     const pool = kindsOfTier(tier);
-    const index = Math.max(0, pool.indexOf(drawn));
-    const step = 360 / pool.length;
+    return this.spinToIndex(pool.length, Math.max(0, pool.indexOf(drawn)));
+  }
+
+  private spinToIndex(count: number, index: number): Promise<void> {
+    const step = 360 / count;
     // 슬라이스 중앙이 12시(포인터)에 오도록
     const target = 360 - (index * step + step / 2);
     this.angle += 360 * 5 + ((target - (this.angle % 360)) + 360) % 360;

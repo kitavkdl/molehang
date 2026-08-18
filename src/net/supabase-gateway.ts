@@ -21,7 +21,8 @@ import {
   type PartKind,
   type PartTier,
 } from '../game/parts.ts';
-import { sanitizePlacements } from '../game/local-gateway.ts';
+import { sanitizePlacements, sanitizeThemes } from '../game/local-gateway.ts';
+import { isThemeId, rollTheme, themeCost, type ThemeId } from '../style/themes.ts';
 import { supabase } from './auth.ts';
 
 /**
@@ -51,6 +52,9 @@ interface ShipRow {
   pulls: unknown;
   placements: unknown;
   titles: string[] | null;
+  theme: unknown;
+  themes: unknown;
+  theme_pulls: unknown;
   log: unknown;
 }
 
@@ -75,6 +79,9 @@ function toState(row: ShipRow): PersistedState {
     },
     placements: sanitizePlacements(row.placements),
     titles: Array.isArray(row.titles) ? row.titles : [],
+    theme: isThemeId(row.theme) ? row.theme : 'classic',
+    themes: sanitizeThemes(row.themes),
+    themePulls: num(row.theme_pulls),
     log: Array.isArray(row.log) ? (row.log as CollectLogEntry[]) : [],
   };
 }
@@ -97,6 +104,9 @@ export class SupabaseGateway implements MolehangGateway {
       pulls: { small: 0, medium: 0, large: 0 },
       placements: {},
       titles: [],
+      theme: 'classic',
+      themes: ['classic'],
+      themePulls: 0,
       log: [],
     };
   }
@@ -191,6 +201,32 @@ export class SupabaseGateway implements MolehangGateway {
       removed: remove,
       newTitleId: fresh.length > 0 ? fresh[fresh.length - 1]! : null,
     };
+  }
+
+  async drawTheme(): Promise<{ state: PersistedState; drawn: ThemeId | null; soldOut: boolean }> {
+    const cost = themeCost(this.state.themePulls);
+    const drawn = rollTheme(this.state.themes, this.rand);
+    if (drawn === null) return { state: this.snapshot(), drawn: null, soldOut: true };
+    if (this.state.scrap < cost) return { state: this.snapshot(), drawn: null, soldOut: false };
+
+    this.state.scrap -= cost;
+    this.state.themePulls += 1;
+    this.state.themes = [...this.state.themes, drawn];
+    this.state.theme = drawn;
+    await this.push({
+      scrap: this.state.scrap,
+      theme_pulls: this.state.themePulls,
+      themes: this.state.themes,
+      theme: this.state.theme,
+    });
+    return { state: this.snapshot(), drawn, soldOut: false };
+  }
+
+  async setTheme(id: ThemeId): Promise<PersistedState> {
+    if (!this.state.themes.includes(id)) return this.snapshot();
+    this.state.theme = id;
+    await this.push({ theme: id });
+    return this.snapshot();
   }
 
   async setPlacements(
