@@ -5,7 +5,7 @@ import {
   type SkyState,
   type TimeOfDaySource,
 } from '../core/time-of-day.ts';
-import type { AvatarSpec } from '../game/avatar.ts';
+import type { AvatarOutfit, AvatarSpec } from '../game/avatar.ts';
 import type { Inventory } from '../game/parts.ts';
 import { Motes } from '../fx/motes.ts';
 import { Arrange } from './arrange.ts';
@@ -13,6 +13,7 @@ import { Avatars } from './avatars.ts';
 import { Birds } from './birds.ts';
 import { Boat } from './boat.ts';
 import { Clouds } from './clouds.ts';
+import { CrewShips } from './crew-ships.ts';
 import { setLampLight, updateFlatLighting } from './flat-material.ts';
 import { Foam } from './foam.ts';
 import { Islands } from './islands.ts';
@@ -52,6 +53,7 @@ export class World {
   private readonly voyage: Voyage;
   private readonly wake: Wake;
   private readonly avatars: Avatars;
+  private readonly crewShips: CrewShips;
   private readonly state: SkyState = createSkyState();
   private readonly target = new Vector3();
 
@@ -101,11 +103,15 @@ export class World {
     this.avatars = new Avatars();
     this.boat.localSpace.add(this.avatars.group);
 
+    // 동행선은 씬(월드) 공간이다 — 내 배와 따로, 자기 파도를 타야 한다
+    this.crewShips = new CrewShips();
+
     this.scene.add(
       this.sky.mesh,
       this.lights.group,
       this.islands.group,
       this.ocean.group,
+      this.crewShips.group,
       this.voyage.group,
       this.clouds.group,
       this.birds.group,
@@ -170,6 +176,11 @@ export class World {
   /** 갑판 위에 설 선장들 — 첫 번째가 나, 나머지는 접속 중인 선원들 */
   setAvatars(specs: readonly AvatarSpec[]): void {
     this.avatars.setCrew(specs);
+  }
+
+  /** 동행선 — 접속 중인 선원들의 배가 내 바다에 같이 떠 있다 (§4.3) */
+  setCrewShips(members: ReadonlyArray<{ id: string; outfit: AvatarOutfit }>): void {
+    this.crewShips.setCrew(members);
   }
 
   /** 인벤토리를 배에 반영 */
@@ -344,6 +355,7 @@ export class World {
       this.voyage.heading,
     );
     this.avatars.update(this.elapsed);
+    this.crewShips.update(this.elapsed, dt, seaX, seaZ, this.voyage.heading);
     this.shadow.update(this.elapsed, seaX, seaZ, this.voyage.heading);
     this.foam.update(this.state, this.elapsed, seaX, seaZ, this.voyage.heading);
     this.wake.update(this.state, this.elapsed, dt, seaX, seaZ, this.voyage.vx, this.voyage.vz);
@@ -433,6 +445,7 @@ export class World {
     this.voyage.dispose();
     this.wake.dispose();
     this.avatars.dispose();
+    this.crewShips.dispose();
     globalThis.removeEventListener('resize', this.resize);
     this.sky.dispose();
     this.ocean.dispose();

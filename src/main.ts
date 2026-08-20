@@ -210,7 +210,12 @@ function boot(): void {
       const event = await game.draw(tier);
       if (event === null) return null;
       savePendingDraw(event.drawn);
-      return { drawn: event.drawn, needsRoom: event.needsRoom, removable: event.removable };
+      return {
+        drawn: event.drawn,
+        needsRoom: event.needsRoom,
+        removable: event.removable,
+        luckyTier: event.luckyTier,
+      };
     },
     install: async (kind, remove) => {
       const outcome = await game.install(kind, remove);
@@ -314,6 +319,8 @@ function boot(): void {
     world.setShipHeft(shipHeft(snap.parts));
     // 갑판 위 선장들 — 첫 번째가 나, 뒤는 같이 접속해 있는 선원들
     world.setAvatars([avatarStore.current, ...snap.crew.map((m) => m.avatar)]);
+    // 동행선 — 선원들의 배가 내 바다에도 뜬다. 돛 줄무늬 = 그 사람 옷 색
+    world.setCrewShips(snap.crew.map((m) => ({ id: m.id, outfit: m.avatar.outfit })));
     crew.update(profileFrom(snap));
   }
 
@@ -443,6 +450,13 @@ function boot(): void {
     game.onGift((gift) => {
       paint(game.snapshot());
       toasts.gift(gift);
+      void sheet.refresh();
+    });
+    // 만선 콤보 — 친구와 60초 안에 서로 수거했다. 수거 연출까지 한 번 더 얹는다
+    game.onCombo((combo) => {
+      paint(game.snapshot());
+      world.playCollect();
+      toasts.combo(combo.withName, combo.bonus);
       void sheet.refresh();
     });
 

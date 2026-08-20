@@ -320,6 +320,12 @@ export function kindsOfTier(tier: PartTier): PartKind[] {
   return PART_KINDS.filter((k) => PART_INFO[k].tier === tier);
 }
 
+/** 한 등급 위 — 순풍(선단 뽑기 승급)이 쓴다. 대형 위는 없다 */
+export function tierAbove(tier: PartTier): PartTier | null {
+  const i = PART_TIERS.indexOf(tier);
+  return i >= 0 && i < PART_TIERS.length - 1 ? PART_TIERS[i + 1]! : null;
+}
+
 /** 뽑기 돌림판에 오르는 종류만 — weight 0 (항해·방치 전용)은 뺀다 */
 export function gachaKindsOfTier(tier: PartTier): PartKind[] {
   return kindsOfTier(tier).filter((k) => PART_INFO[k].weight > 0);

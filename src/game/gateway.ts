@@ -61,6 +61,8 @@ export interface DrawOutcome {
   drawn: PartKind | null;
   /** 자리가 모자라 아직 장착되지 않았는지 */
   needsRoom: boolean;
+  /** 순풍(선단 보너스) — 낸 값보다 한 등급 위 돌림판에서 뽑혔는지 */
+  luckyTier: boolean;
 }
 
 export interface InstallOutcome {
@@ -84,8 +86,12 @@ export interface MolehangGateway {
   sync(now: number, multiplier?: number): Promise<PersistedState>;
   /** 수거 확정 — 미수거분이 고철 잔고로 들어간다 */
   collect(now: number, multiplier?: number): Promise<CollectOutcome>;
-  /** 뽑기 — 고철을 쓰고 부품 하나를 뽑는다. 장착은 별도(자리 결정이 필요할 수 있다) */
-  draw(tier: PartTier, now: number, multiplier?: number): Promise<DrawOutcome>;
+  /**
+   * 뽑기 — 고철을 쓰고 부품 하나를 뽑는다. 장착은 별도(자리 결정이 필요할 수 있다).
+   * tailwind 는 순풍(선단 보너스) 확률(0~1) — 그 확률로 한 등급 위 돌림판에서 뽑는다.
+   * 가격·뽑기 횟수는 언제나 **낸 등급** 기준이다.
+   */
+  draw(tier: PartTier, now: number, multiplier?: number, tailwind?: number): Promise<DrawOutcome>;
   /** 장착 확정. remove 를 주면 그 부품을 하나 빼고 자리를 만든다 */
   install(
     kind: PartKind,

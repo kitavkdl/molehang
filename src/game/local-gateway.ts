@@ -21,6 +21,7 @@ import {
   productionPerSecond,
   rollPart,
   sanitizeInventory,
+  tierAbove,
   unlockedTitleIds,
   usedSlots,
   type PartKind,
@@ -110,22 +111,27 @@ export class LocalGateway implements MolehangGateway {
     return { state: this.snapshot(), taken, entry };
   }
 
-  async draw(tier: PartTier, now: number, multiplier = 1): Promise<DrawOutcome> {
+  async draw(tier: PartTier, now: number, multiplier = 1, tailwind = 0): Promise<DrawOutcome> {
     // 정산에 선단 배율을 그대로 태운다 — 1로 굳히면 뽑을 때마다 보너스 축적분이 증발한다
     await this.sync(now, multiplier);
     const cost = gachaCost(tier, this.state.pulls[tier], gachaDiscount(this.state.parts));
     if (this.state.scrap < cost) {
-      return { state: this.snapshot(), drawn: null, needsRoom: false };
+      return { state: this.snapshot(), drawn: null, needsRoom: false, luckyTier: false };
     }
 
     this.state.scrap -= cost;
     this.state.pulls[tier] += 1;
-    const drawn = rollPart(tier, this.rand);
+    // 순풍(선단) — 확률로 한 등급 위 돌림판에서 뽑는다. 가격·횟수는 낸 등급 그대로다
+    let rollTier: PartTier = tier;
+    if (tailwind > 0 && this.rand() < tailwind) {
+      rollTier = tierAbove(tier) ?? tier;
+    }
+    const drawn = rollPart(rollTier, this.rand);
     this.write();
 
     const need = PART_INFO[drawn].slots;
     const free = maxSlots(this.state.parts, this.config.baseSlots) - usedSlots(this.state.parts);
-    return { state: this.snapshot(), drawn, needsRoom: need > free };
+    return { state: this.snapshot(), drawn, needsRoom: need > free, luckyTier: rollTier !== tier };
   }
 
   async install(

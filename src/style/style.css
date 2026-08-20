@@ -223,6 +223,29 @@ body {
   color: color-mix(in srgb, var(--mh-role-ink) 74%, var(--mh-role-surface));
 }
 
+/* 같이 있는 동안 켜져 있는 효과들 — 혼자면 통째로 숨긴다 */
+.crew-perks {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mh-role-gauge) 12%, transparent);
+  display: grid;
+  gap: 4px;
+}
+
+.crew-perks li {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--mh-role-ink) 82%, var(--mh-role-surface));
+}
+
+.crew-perks li::before {
+  content: '⚓ ';
+  color: var(--mh-role-gauge);
+}
+
 .crew-list {
   list-style: none;
   margin: 0 0 12px;

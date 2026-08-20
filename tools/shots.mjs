@@ -384,13 +384,27 @@ async function main() {
       await b.waitForFunction(() => window.__MOLEHANG_READY__ === true, null, { timeout: 25_000 });
       await a.waitForTimeout(2200);
 
+      // 동행선 — A 의 바다에 B 의 배가 같이 떠 있다 (솟아오르는 연출이 끝날 때까지 잠깐)
+      await a.waitForTimeout(1800);
+      const probeA = await a.evaluate(() => window.molehang?.sampleLuminance() ?? null);
+      await a.screenshot({ path: path.join(OUT, 'crew-sails.png') });
+      check('crew-sails', '동행', probeA, []);
+
       // A 가 수거하면 B 에게 배당 토스트가 뜬다
       await a.evaluate(() => window.molehang?.collect());
       await b.waitForTimeout(700);
       await b.screenshot({ path: path.join(OUT, 'crew-gift.png') });
 
+      // B 도 60초 안에 수거 → 만선 콤보 (+30%) 토스트
+      await b.evaluate(() => window.molehang?.collect());
+      await b.waitForTimeout(700);
+      await b.screenshot({ path: path.join(OUT, 'crew-combo.png') });
+
       await b.click('#open-sheet');
       await b.waitForTimeout(700);
+      // 선단 섹션(효과 목록 포함)이 보이게 스크롤해서 찍는다
+      await b.evaluate(() => document.getElementById('sec-crew')?.scrollIntoView({ block: 'start' }));
+      await b.waitForTimeout(400);
       await b.screenshot({ path: path.join(OUT, 'crew-sheet.png') });
       await context.close();
     }

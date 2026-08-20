@@ -19,6 +19,7 @@ import {
   productionPerSecond,
   rollPart,
   sanitizeInventory,
+  tierAbove,
   unlockedTitleIds,
   usedSlots,
   type PartKind,
@@ -183,19 +184,31 @@ export class SupabaseGateway implements MolehangGateway {
   }
 
   // 서버 정산(sync_ship)은 선단 배율을 모른다 — 배율 인자는 인터페이스 호환용으로만 받는다
-  async draw(tier: PartTier, now: number, _multiplier = 1): Promise<DrawOutcome> {
+  async draw(tier: PartTier, now: number, _multiplier = 1, tailwind = 0): Promise<DrawOutcome> {
     await this.sync(now, 1);
     const cost = gachaCost(tier, this.state.pulls[tier], gachaDiscount(this.state.parts));
-    if (this.state.scrap < cost) return { state: this.snapshot(), drawn: null, needsRoom: false };
+    if (this.state.scrap < cost) {
+      return { state: this.snapshot(), drawn: null, needsRoom: false, luckyTier: false };
+    }
 
     this.state.scrap -= cost;
     this.state.pulls[tier] += 1;
-    const drawn = rollPart(tier, this.rand);
+    // 순풍(선단) — LocalGateway 와 같은 규칙. 가격·횟수는 낸 등급 그대로다
+    let rollTier: PartTier = tier;
+    if (tailwind > 0 && this.rand() < tailwind) {
+      rollTier = tierAbove(tier) ?? tier;
+    }
+    const drawn = rollPart(rollTier, this.rand);
 
     await this.push({ scrap: this.state.scrap, pulls: this.state.pulls });
 
     const free = maxSlots(this.state.parts, this.config.baseSlots) - usedSlots(this.state.parts);
-    return { state: this.snapshot(), drawn, needsRoom: PART_INFO[drawn].slots > free };
+    return {
+      state: this.snapshot(),
+      drawn,
+      needsRoom: PART_INFO[drawn].slots > free,
+      luckyTier: rollTier !== tier,
+    };
   }
 
   async install(

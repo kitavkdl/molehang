@@ -47,6 +47,7 @@ const KO: Dict = {
   'gacha.statSlots': '자리',
   'gacha.statRate': '생산',
   'gacha.statEffect': '효과',
+  'gacha.tailwind': '순풍이 분다 — 한 등급 위 돌림판!',
 
   // 기록 시트
   'sheet.title': '항해 기록',
@@ -80,9 +81,14 @@ const KO: Dict = {
   'crew.copy': '초대 링크 복사',
   'crew.copied': '복사했어요!',
   'crew.join': '코드로 합류',
-  'crew.leadSolo': '혼자서도 문제없지만, 친구가 합류하면 더 빨리 쌓이고 부품도 나눠 받아요.',
+  'crew.leadSolo': '혼자서도 문제없지만, 친구가 같이 켜 두면 바다가 확실히 달라져요.',
   'crew.leadTogether':
-    '같이 있는 동안 축적 속도 {bonus}. 선원이 수거하면 그 부품 하나가 내 배에도 붙어요.',
+    '같이 있는 동안 이 바다가 달라집니다 — 선원들의 배가 함께 떠 있고, 아래 효과가 전부 켜져 있어요.',
+  'crew.perkRate': '축적 속도 {bonus}',
+  'crew.perkShare': '수거 배당 — 선원이 수거하면 그 몫의 12%가 내 지갑에',
+  'crew.perkCombo': '만선 콤보 — 60초 안에 서로 수거하면 양쪽 다 +30%',
+  'crew.perkTailwind': '순풍 — 뽑기가 {n}% 확률로 한 등급 위 돌림판',
+  'crew.combo': '만선! {name}와 같은 물때',
   'crew.note':
     '지금은 같은 브라우저의 다른 탭·창끼리만 이어집니다. 다른 기기의 친구와 연결하려면 로그인이 필요해요.',
   'crew.me': '나',
@@ -178,7 +184,7 @@ const KO: Dict = {
     '이게 이 게임의 유일한 고민이에요. 배에 붙일 자리는 한정돼 있고, 큰 부품일수록 자리를 많이 먹습니다. 자리가 없는데 뽑으면, 무엇을 뽑아낼지 그 자리에서 골라야 해요.',
   'tutorial.crew.title': '친구와 같이 켜 두면',
   'tutorial.crew.body':
-    '초대 코드로 선단을 만들면 같이 접속해 있는 동안 축적이 빨라지고, 친구가 수거할 때마다 나에게도 고철이 떨어집니다.',
+    '초대 코드로 선단을 만들면 같이 접속해 있는 동안 축적이 빨라지고, 친구가 수거할 때마다 나에게도 고철이 떨어집니다. 친구들의 배가 내 바다에 같이 떠 있고, 60초 안에 서로 수거하면 만선 콤보 보너스까지.',
 
   // 토스트
   'toast.installed': '장착',
@@ -223,6 +229,7 @@ const EN: Dict = {
   'gacha.statSlots': 'Space',
   'gacha.statRate': 'Rate',
   'gacha.statEffect': 'Effect',
+  'gacha.tailwind': 'Tailwind — one tier up!',
 
   'sheet.title': 'Logbook',
   'sheet.sectionAvatar': 'Captain avatar',
@@ -254,9 +261,14 @@ const EN: Dict = {
   'crew.copy': 'Copy invite link',
   'crew.copied': 'Copied!',
   'crew.join': 'Join with code',
-  'crew.leadSolo': "Fine on your own — but with friends it piles up faster and parts get shared.",
+  'crew.leadSolo': 'Fine on your own — but the sea is noticeably different with friends online.',
   'crew.leadTogether':
-    'While you are online together: {bonus} rate. When a crewmate collects, one of their parts lands on your ship too.',
+    'While you are online together the sea changes — your crewmates’ ships sail alongside, and every perk below is on.',
+  'crew.perkRate': 'Accrual {bonus}',
+  'crew.perkShare': 'Dividend — 12% of every crewmate collect lands in your wallet',
+  'crew.perkCombo': 'Full-catch combo — collect within 60s of each other for +30% each',
+  'crew.perkTailwind': 'Tailwind — {n}% chance a draw jumps one tier up',
+  'crew.combo': 'Full catch! Same tide as {name}',
   'crew.note':
     'Right now this only links tabs in the same browser. Sign in to connect with friends on other devices.',
   'crew.me': 'You',
@@ -345,7 +357,7 @@ const EN: Dict = {
     'This is the one real decision here. Your hull has limited space, and bigger parts eat more of it. Draw with no room left and you must choose, right then, what to rip off.',
   'tutorial.crew.title': 'Better with friends online',
   'tutorial.crew.body':
-    'Make a crew with an invite code: while you are online together the rate goes up, and every time a crewmate collects, some scrap lands on you too.',
+    'Make a crew with an invite code: while online together the rate goes up, crewmate collects pay you a dividend, their ships sail beside yours — and collecting within 60s of each other triggers a combo bonus.',
 
   'toast.installed': 'installed',
   'toast.replaced': 'swapped for {name}',

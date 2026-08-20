@@ -43,6 +43,8 @@ export interface GachaHandlers {
     drawn: PartKind;
     needsRoom: boolean;
     removable: PartKind[];
+    /** 순풍(선단 보너스) — 낸 값보다 한 등급 위 돌림판에서 뽑혔는지 */
+    luckyTier: boolean;
   } | null>;
   /** 장착 확정 */
   install: (kind: PartKind, remove: PartKind | null) => Promise<void>;
@@ -169,7 +171,17 @@ export class GachaPanel {
       return;
     }
 
-    await this.spinTo(tier, outcome.drawn);
+    // 순풍(선단 보너스) — 한 등급 위가 걸렸다. 돌림판을 그 등급 판으로 갈아끼우고
+    // 이어서 돌린다. "판이 뒤집히는" 순간이 곧 연출이다.
+    const wheelTier = outcome.luckyTier ? PART_INFO[outcome.drawn].tier : tier;
+    if (outcome.luckyTier) {
+      this.title.textContent = t(`gacha.${wheelTier}`);
+      this.note.textContent = t('gacha.tailwind');
+      this.buildWheel(wheelTier);
+      this.startIdleSpin();
+    }
+
+    await this.spinTo(wheelTier, outcome.drawn);
     this.pending = { drawn: outcome.drawn, needsRoom: outcome.needsRoom };
     this.busy = false;
     this.showResult(outcome.drawn, outcome.needsRoom, outcome.removable);

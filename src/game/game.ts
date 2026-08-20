@@ -3,7 +3,14 @@ import type { CrewChannel } from '../net/crew-channel.ts';
 import { accrue, capacityFor, fillRatio } from './accrual.ts';
 import { GAME_CONFIG, type GameConfig } from './config.ts';
 import { THEMES, THEME_IDS, themeCost, type ThemeId } from '../style/themes.ts';
-import { crewMultiplier, type CrewGift, type CrewMember } from './crew.ts';
+import {
+  comboScrap,
+  crewMultiplier,
+  isCombo,
+  tailwindChance,
+  type CrewGift,
+  type CrewMember,
+} from './crew.ts';
 import type {
   CollectLogEntry,
   InstallOutcome,
@@ -85,7 +92,17 @@ export interface DrawEvent {
   needsRoom: boolean;
   /** 자리를 비우려고 뺄 수 있는 후보 */
   removable: PartKind[];
+  /** 순풍(선단 보너스) — 낸 값보다 한 등급 위 돌림판에서 뽑혔는지 */
+  luckyTier: boolean;
   snapshot: GameSnapshot;
+}
+
+/** 만선 콤보 — 친구와 60초 안에 서로 수거했다 (game/crew.ts) */
+export interface CrewComboEvent {
+  /** 내 수거량에 얹어 받은 보너스 고철 */
+  bonus: number;
+  /** 같은 물때를 잡은 친구 이름 */
+  withName: string;
 }
 
 export class Game {
@@ -121,6 +138,15 @@ export class Game {
   private readonly collectListeners = new Set<(e: CollectEvent) => void>();
   private readonly changeListeners = new Set<(s: GameSnapshot) => void>();
   private readonly giftListeners = new Set<(g: CrewGift) => void>();
+  private readonly comboListeners = new Set<(e: CrewComboEvent) => void>();
+
+  /**
+   * 만선 콤보(§4.3) 추적 — 내 마지막 수거와 친구의 마지막 수거(=배당 도착)를 붙잡아 두고,
+   * 두 시각이 60초 창 안에 겹치면 내 수거량의 30%를 보너스로 받는다.
+   * 각 수거는 콤보를 **한 번만** 만든다 — comboed 플래그가 이중 지급을 막는다.
+   */
+  private lastOwnCollect: { at: number; amount: number; comboed: boolean } | null = null;
+  private lastMateCollect: { at: number; name: string; comboed: boolean } | null = null;
 
   constructor(
     private gateway: MolehangGateway,
@@ -281,16 +307,52 @@ export class Game {
 
     this.channel?.announceCollect(outcome.taken, []);
 
-    const event: CollectEvent = { amount: outcome.taken, entry: outcome.entry, snapshot: snap };
+    // 만선 콤보 — 친구가 방금(60초 안에) 수거했다면 이 수거가 콤보를 완성한다
+    const now = this.clock.now();
+    this.lastOwnCollect = { at: now, amount: outcome.taken, comboed: false };
+    if (
+      this.lastMateCollect !== null &&
+      !this.lastMateCollect.comboed &&
+      isCombo(now, this.lastMateCollect.at)
+    ) {
+      await this.fireCombo(this.lastMateCollect.name);
+    }
+
+    const event: CollectEvent = {
+      amount: outcome.taken,
+      entry: outcome.entry,
+      snapshot: this.snapshot(),
+    };
     for (const fn of this.collectListeners) fn(event);
     return event;
+  }
+
+  /** 만선 콤보 지급 — 내 수거량의 30%를 보너스 고철로. 양쪽 수거를 소진 처리한다 */
+  private async fireCombo(withName: string): Promise<void> {
+    if (this.lastOwnCollect === null || this.lastMateCollect === null) return;
+    this.lastOwnCollect.comboed = true;
+    this.lastMateCollect.comboed = true;
+
+    const bonus = comboScrap(this.lastOwnCollect.amount);
+    // 배당과 같은 경로(receiveGift)를 탄다 — 새 변이 경로를 만들지 않는다 (§4.12)
+    this.persisted = await this.enqueue(() =>
+      this.gateway.receiveGift(this.clock.now(), bonus, this.multiplier()),
+    );
+    this.emitChange(this.snapshot());
+    for (const fn of this.comboListeners) fn({ bonus, withName });
   }
 
   /** 뽑기. 고철이 모자라면 null */
   async draw(tier: PartTier): Promise<DrawEvent | null> {
     if (!this.ready) return null;
+    // 순풍(§4.3) — 같이 접속해 있는 동안에만 확률이 붙는다. 혼자면 0.
     const outcome = await this.enqueue(() =>
-      this.gateway.draw(tier, this.clock.now(), this.multiplier()),
+      this.gateway.draw(
+        tier,
+        this.clock.now(),
+        this.multiplier(),
+        tailwindChance(this.crew.length + 1),
+      ),
     );
     this.persisted = outcome.state;
     this.emitChange(this.snapshot());
@@ -299,6 +361,7 @@ export class Game {
     return {
       drawn: outcome.drawn,
       needsRoom: outcome.needsRoom,
+      luckyTier: outcome.luckyTier,
       // 뽑힌 것보다 자리를 많이 차지하는 것부터 보여 주면 결정이 쉬워진다
       removable: removableKinds(this.persisted.parts).sort(
         (a, b) => PART_INFO[b].slots - PART_INFO[a].slots,
@@ -420,6 +483,11 @@ export class Game {
     return () => this.giftListeners.delete(fn);
   }
 
+  onCombo(fn: (e: CrewComboEvent) => void): () => void {
+    this.comboListeners.add(fn);
+    return () => this.comboListeners.delete(fn);
+  }
+
   private async applyGift(gift: CrewGift): Promise<void> {
     if (!this.ready) return;
     this.persisted = await this.enqueue(() =>
@@ -427,6 +495,18 @@ export class Game {
     );
     this.emitChange(this.snapshot());
     for (const fn of this.giftListeners) fn(gift);
+
+    // 배당 도착 = 친구가 방금 수거했다. 내가 60초 안에 수거했었다면 콤보 완성 —
+    // 양쪽 탭이 같은 규칙으로 각자 판정하므로 서로에게 다시 알릴 필요가 없다.
+    const now = this.clock.now();
+    this.lastMateCollect = { at: now, name: gift.fromName, comboed: false };
+    if (
+      this.lastOwnCollect !== null &&
+      !this.lastOwnCollect.comboed &&
+      isCombo(this.lastOwnCollect.at, now)
+    ) {
+      await this.fireCombo(gift.fromName);
+    }
   }
 
   private emitChange(s: GameSnapshot): void {

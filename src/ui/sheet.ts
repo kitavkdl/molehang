@@ -6,7 +6,7 @@ import {
   type AvatarOutfit,
   type AvatarSpec,
 } from '../game/avatar.ts';
-import { CREW_MAX, bonusLabel } from '../game/crew.ts';
+import { CREW_MAX, bonusLabel, tailwindChance } from '../game/crew.ts';
 import type { GameSnapshot } from '../game/game.ts';
 import type { CollectLogEntry } from '../game/gateway.ts';
 import {
@@ -45,6 +45,7 @@ export class LogSheet {
   private readonly replayBtn = must('replay-tutorial');
   private readonly crewSize = must('crew-size');
   private readonly crewLead = must('crew-lead');
+  private readonly crewPerks = must('crew-perks') as HTMLUListElement;
   private readonly crewList = must('crew-list') as HTMLUListElement;
   private readonly crewCode = must('crew-code');
   private readonly crewCopy = must('crew-copy') as HTMLButtonElement;
@@ -196,8 +197,25 @@ export class LogSheet {
     this.crewCode.textContent = this.crewActions.code();
     this.crewLead.textContent =
       snap.crewSize > 1
-        ? t('crew.leadTogether', { bonus: bonusLabel(snap.crewSize) })
+        ? t('crew.leadTogether')
         : t('crew.leadSolo');
+
+    // 같이 있는 동안 켜져 있는 효과들 — 보여야 체감이 된다. 혼자면 통째로 숨긴다(§4.3 원칙 1)
+    this.crewPerks.hidden = snap.crewSize <= 1;
+    this.crewPerks.textContent = '';
+    if (snap.crewSize > 1) {
+      const perks = [
+        t('crew.perkRate', { bonus: bonusLabel(snap.crewSize) }),
+        t('crew.perkShare'),
+        t('crew.perkCombo'),
+        t('crew.perkTailwind', { n: Math.round(tailwindChance(snap.crewSize) * 100) }),
+      ];
+      for (const perk of perks) {
+        const li = document.createElement('li');
+        li.textContent = perk;
+        this.crewPerks.append(li);
+      }
+    }
 
     this.crewList.textContent = '';
     this.crewList.append(crewRow(t('crew.me'), snap.title.name[loc], snap.partCount, true));

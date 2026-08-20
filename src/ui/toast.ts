@@ -59,6 +59,23 @@ export class Toasts {
     this.push(el, 3200);
   }
 
+  /** 만선 콤보 — 친구와 60초 안에 서로 수거했다 (§4.3) */
+  combo(withName: string, bonus: number): void {
+    const el = document.createElement('div');
+    el.className = 'toast toast--gift';
+
+    const who = document.createElement('span');
+    who.className = 'toast__label';
+    who.textContent = t('crew.combo', { name: withName });
+
+    const body = document.createElement('span');
+    body.className = 'toast__gift-body';
+    body.textContent = `+${amount(bonus)}`;
+
+    el.append(who, body);
+    this.push(el, 3600);
+  }
+
   title(title: ShipTitle): void {
     const el = document.createElement('div');
     el.className = 'toast toast--title';
