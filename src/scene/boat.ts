@@ -72,6 +72,12 @@ export class Boat {
   // --- 항해 상호작용 (§4.9) — 부품이 배의 "달리는 모습"을 바꾼다 ---
   /** 배 무게 (parts.ts shipHeft). 무거울수록 물에 더 잠긴 채 달린다 */
   private heft = 0;
+  /** 회두 기울기 — 도는 방향 안쪽으로 몸을 눕힌다. heading 변화율에서 직접 뽑는다 */
+  private prevHeading = BOAT_YAW;
+  private yawRate = 0;
+  private bank = 0;
+  /** 암초 충돌 요동 타이머 — jolt() 가 0으로 되감는다 */
+  private joltT = Infinity;
   /** 엔진 뒤의 불꽃 — 달릴 때만 보인다 */
   private readonly flames: Array<{ group: Group; phase: number }> = [];
   /** 연기가 피어오르는 자리 (굴뚝·터빈 꼭대기). 배치 드래그를 따라간다 */
@@ -408,8 +414,25 @@ export class Boat {
     // 속도를 배 기준으로 분해: 앞으로 달리면 선수가 살짝 들리고, 옆으로 밀리면 기운다
     const fwd = vx * Math.sin(heading) + vz * Math.cos(heading);
     const lat = vx * Math.cos(heading) - vz * Math.sin(heading);
+
+    // 회두 기울기 — 달리면서 돌면 도는 방향 안쪽으로 몸을 눕힌다 (§4.9 크루징 체감).
+    // heading 변화율을 여기서 직접 재므로 voyage 쪽 API 는 그대로다.
+    const rawYaw = dt > 1e-4 ? shortestAngle(this.prevHeading, heading) / dt : 0;
+    this.prevHeading = heading;
+    this.yawRate += (clampAbs(rawYaw, 2.4) - this.yawRate) * Math.min(1, dt * 5);
+    const bankTarget = clampAbs(-this.yawRate * Math.min(1, Math.abs(fwd) / 2.6) * 0.11, 0.13);
+    this.bank += (bankTarget - this.bank) * Math.min(1, dt * 4);
+
     this.body.rotation.x = -fwd * 0.018;
-    this.body.rotation.z = lat * 0.03;
+    this.body.rotation.z = lat * 0.03 + this.bank;
+
+    // 암초 충돌 요동 — 짧은 진저리. 수거 바운스(팽창)와 달리 회전으로만 떤다
+    if (this.joltT < 0.8) {
+      this.joltT += dt;
+      const decay = Math.exp(-5.5 * this.joltT);
+      this.body.rotation.x += decay * 0.05 * Math.sin(this.joltT * 34);
+      this.body.rotation.z += decay * 0.04 * Math.sin(this.joltT * 27 + 1.2);
+    }
     this.body.scale.setScalar(bounceScale);
 
     // --- 부품 항해 연출 — 정박(drive 0)이면 전부 잠잠하다 ---
@@ -480,6 +503,11 @@ export class Boat {
     this.bounceT = 0;
   }
 
+  /** 암초 충돌 요동 — 배가 부르르 떤다. 수거 바운스와 별개다 */
+  jolt(): void {
+    this.joltT = 0;
+  }
+
   /** 파티클이 빨려 들어갈 목표점 */
   get collectTarget(): Vector3 {
     return this.crateWorld;
@@ -490,4 +518,16 @@ export class Boat {
     for (const m of this.materials) m.dispose();
     disposePartOutlines();
   }
+}
+
+/** from 에서 to 로 가는 최단 각 차이 (-π ~ π) — heading 이 ±π 에서 감겨 있어 필요하다 */
+function shortestAngle(from: number, to: number): number {
+  let d = (to - from) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+function clampAbs(v: number, limit: number): number {
+  return v < -limit ? -limit : v > limit ? limit : v;
 }

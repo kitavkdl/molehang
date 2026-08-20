@@ -66,6 +66,8 @@ export class World {
   private lastFrame = 0;
   private raf = 0;
   private running = false;
+  /** 속도감 카메라 당김 0~1 — 달리면 카메라가 살짝 물러난다. 급변하지 않게 여기서 눅인다 */
+  private speedPull = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -98,6 +100,8 @@ export class World {
 
     this.voyage = new Voyage(canvas);
     this.wake = new Wake();
+    // 암초 충돌 — 배가 부르르 떤다. (카메라 흔들림은 frame 이 voyage.shake 로 얹는다)
+    this.voyage.onHit(() => this.boat.jolt());
 
     // 아바타는 배 로컬 그룹에 태운다 — 파도 흔들림과 요(yaw)를 배와 같이 탄다
     this.avatars = new Avatars();
@@ -220,6 +224,26 @@ export class World {
   /** 선체 내구도 0~1 — 항해 UI 의 게이지가 읽는다 */
   get voyageHull(): number {
     return this.voyage.hullIntegrity;
+  }
+
+  /** 지금 낼 수 있는 최고 속도 — 항해 UI 속도 게이지의 분모 */
+  get voyageMaxSpeed(): number {
+    return this.voyage.maxSpeed;
+  }
+
+  /** 항로 위험도 0~1 — 항해 UI 의 "전방 암초!" 배지가 읽는다 */
+  get voyageDanger(): number {
+    return this.voyage.danger;
+  }
+
+  /** 이번 항해 누적 거리 (유닛) */
+  get voyageTrip(): number {
+    return this.voyage.tripDistance;
+  }
+
+  /** 화면 조이스틱 상태 — 항해 UI 가 누른 자리에 스틱을 그린다 */
+  voyageStick(): { active: boolean; x: number; y: number; dx: number; dy: number } {
+    return this.voyage.stickPose();
   }
 
   /** 뱃머리 방향 (라디안) — 자동 검증용 */
@@ -371,6 +395,16 @@ export class World {
     const sway = Math.sin(this.elapsed * 0.13) * 0.3 * steady;
     const lift = Math.sin(this.elapsed * 0.19) * 0.09 * steady;
 
+    // 속도감 — 달리면 카메라가 살짝 물러나며 높아진다. 정박하면 제자리로 눅는다.
+    // §4.1 기본 구도의 개정이 아니라 체이스 캠(항해 한정) 위에 얹는 연출이다
+    const pullTarget = this.voyage.active ? Math.min(1, this.voyage.speed / 6.5) : 0;
+    this.speedPull += (pullTarget - this.speedPull) * Math.min(1, dt * 1.6);
+
+    // 충돌 흔들림 — 암초에 부딪힌 직후 짧고 빠르게 떤다 (voyage.shake 가 지수감쇠)
+    const quake = this.voyage.shake * steady;
+    const quakeX = quake * 0.3 * Math.sin(this.elapsed * 53);
+    const quakeY = quake * 0.22 * Math.sin(this.elapsed * 47 + 1.7);
+
     // 확대하면 배의 파도 흔들림을 따라간다 — 망원경으로 배를 좇는 것처럼.
     // 안 그러면 4배에서는 배가 화면 밖으로 들락거린다
     const follow = Math.min(1, Math.max(0, zoom - 1)) * this.boat.group.position.y;
@@ -384,14 +418,14 @@ export class World {
     const yaw = this.voyage.viewYaw;
     const cy = Math.cos(yaw);
     const sy = Math.sin(yaw);
-    const camX = sway + px;
-    const camZ = framing.distance;
+    const camX = sway + px + quakeX;
+    const camZ = framing.distance * (1 + 0.1 * this.speedPull);
     this.camera.position.set(
       camX * cy + camZ * sy,
-      framing.height + lift + py + follow,
+      framing.height + lift + py + follow + quakeY + 0.5 * this.speedPull,
       -camX * sy + camZ * cy,
     );
-    this.target.set(px * cy, framing.targetY + py + follow, -px * sy);
+    this.target.set(px * cy, framing.targetY + py + follow + quakeY * 0.5, -px * sy);
     this.camera.lookAt(this.target);
     this.sky.mesh.position.copy(this.camera.position);
 

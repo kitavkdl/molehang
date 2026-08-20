@@ -82,17 +82,39 @@
       </div>
 
       <!-- 항해모드 안내 -->
-      <div class="arrange-bar" id="voyage-bar" hidden>
+      <div class="arrange-bar voyage-bar" id="voyage-bar" hidden>
+        <div class="voyage-danger" id="voyage-danger" hidden>전방 암초!</div>
         <span class="arrange-bar__speed" id="voyage-speed">0.0</span>
-        <span class="hull">
-          <span class="hull__label" id="voyage-hull-label">선체</span>
-          <span class="hull__bar"><span class="hull__fill" id="voyage-hull-fill"></span></span>
-        </span>
-        <span class="arrange-bar__hint" id="voyage-hint">WASD나 화면을 끌어서 항해하세요</span>
+        <span class="voyage-trip" id="voyage-trip"></span>
+        <div class="voyage-gauges">
+          <span class="vgauge">
+            <span class="vgauge__top">
+              <span class="vgauge__label" id="voyage-speed-label">속도</span>
+            </span>
+            <span class="vgauge__bar"><span class="vgauge__fill" id="voyage-speed-fill"></span></span>
+          </span>
+          <span class="vgauge" id="voyage-hull">
+            <span class="vgauge__top">
+              <span class="vgauge__label" id="voyage-hull-label">선체</span>
+              <span class="vgauge__num" id="voyage-hull-num">100%</span>
+            </span>
+            <span class="vgauge__bar"><span class="vgauge__fill" id="voyage-hull-fill"></span></span>
+          </span>
+        </div>
+        <span class="arrange-bar__hint voyage-hint" id="voyage-hint">WASD나 화면을 끌어서 항해하세요</span>
         <div class="arrange-bar__actions">
           <button class="arrange-bar__done" id="voyage-done" type="button">정박</button>
         </div>
       </div>
+
+      <!-- 항해 터치 조이스틱 — 누른 자리에 뜬다. 장식일 뿐 입력은 캔버스가 받는다 -->
+      <div class="voyage-stick" id="voyage-stick" hidden aria-hidden="true">
+        <div class="voyage-stick__base"></div>
+        <div class="voyage-stick__knob" id="voyage-stick-knob"></div>
+      </div>
+
+      <!-- 암초 충돌 플래시 — 화면 가장자리가 한 번 붉게 번쩍인다 -->
+      <div class="voyage-flash" id="voyage-flash" aria-hidden="true"></div>
 
       <!-- 하단: 지갑 + 뽑기 + 수거 -->
       <footer class="dock">

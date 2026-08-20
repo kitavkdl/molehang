@@ -270,8 +270,14 @@ function boot(): void {
       if (active) arrangeUi.close();
       world.setVoyageMode(active);
     },
-    () => world.voyageSpeed,
-    () => world.voyageHull,
+    {
+      speed: () => world.voyageSpeed,
+      maxSpeed: () => world.voyageMaxSpeed,
+      hull: () => world.voyageHull,
+      danger: () => world.voyageDanger,
+      trip: () => world.voyageTrip,
+      stick: () => world.voyageStick(),
+    },
   );
 
   // 암초 충돌 — 벌점은 없다. 대신 따개비가 붙는다(반드시 장착, 뽑기와 같은 유머)
@@ -279,6 +285,7 @@ function boot(): void {
   const BARNACLE_MAX = 24;
   let barnaclePending = false;
   world.onReefHit(() => {
+    voyageUi.flashHit();
     toasts.warn(t('voyage.hit'));
     if (barnaclePending) return;
     if (Math.random() >= BARNACLE_CHANCE) return;

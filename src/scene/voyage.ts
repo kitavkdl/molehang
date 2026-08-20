@@ -11,7 +11,7 @@ import {
 } from 'three';
 import { flat, type FlatMaterial } from './flat-material.ts';
 import { FX_COLORS, int } from '../style/palette.ts';
-import { BOAT_YAW } from './hull.ts';
+import { BOAT_YAW, HULL } from './hull.ts';
 import { sampleWave } from './ocean.ts';
 
 /**
@@ -79,6 +79,11 @@ const RISE_DUR = 0.8;
 const SINK_DUR = 0.65;
 /** 정박 시 소품들이 가라앉는 시차 — 한꺼번에 꺼지면 정전 같다 */
 const SINK_STAGGER = 0.09;
+/** 항로 위험 감지 거리 — 이 안쪽에서 진행 방향과 겹치는 암초가 경고를 낸다 */
+const DANGER_AHEAD = 30;
+/** 뱃머리 물보라가 시작되는 속도 / 방울 간격 (지나온 거리 기준) */
+const SPRAY_MIN_SPEED = 2.4;
+const SPRAY_EVERY = 3.4;
 
 type PropKind = 'reef' | 'spire' | 'islet' | 'buoy' | 'drift';
 
@@ -103,6 +108,10 @@ interface Prop {
   /** 등장/퇴장 때 잠수하는 깊이 */
   depth: number;
   mesh: Group;
+  /** 수면의 물때 링 — 항로에 걸린 암초는 이 링이 고동치며 경고한다 */
+  ring: Mesh | null;
+  /** 항로 위험도 0~1 (부드럽게 따라간다) — 링 고동과 UI 경고가 같이 읽는다 */
+  warn: number;
   geos: BufferGeometry[];
   anim: 'rise' | 'idle' | 'sink';
   t: number;
@@ -207,6 +216,15 @@ export class Voyage {
   private orbitX = 0;
   /** 선체 내구도 0~1 — 암초에 깎이고 정박하면 아문다 */
   private hull = 1;
+  /** 충돌 화면 흔들림 0~1 — 부딪히는 순간 1로 튀고 지수감쇠한다 */
+  private shakeMag = 0;
+  /** 이번 항해에서 지나온 거리 (유닛) — 출항할 때마다 0에서 시작 */
+  private trip = 0;
+  /** 항로 위에 걸린 가장 가까운 암초의 위험도 0~1 — UI 경고 배지가 읽는다 */
+  private dangerLevel = 0;
+  /** 뱃머리 물보라 간격 누산 / 좌우 번갈이 */
+  private sprayAcc = 0;
+  private spraySide = 1;
 
   private props: Prop[] = [];
   private readonly splashes: Splash[] = [];
@@ -329,6 +347,44 @@ export class Voyage {
     return this.hull;
   }
 
+  /** 지금 낼 수 있는 최고 속도 — UI 속도 게이지의 분모 */
+  get maxSpeed(): number {
+    return this.currentMax();
+  }
+
+  /** 충돌 화면 흔들림 0~1 — world 가 카메라에 얹는다 */
+  get shake(): number {
+    return this.shakeMag;
+  }
+
+  /** 이번 항해 누적 거리 (유닛) — UI 가 해리로 바꿔 보여준다 */
+  get tripDistance(): number {
+    return this.trip;
+  }
+
+  /** 항로 위험도 0~1 — UI "전방 암초!" 배지가 읽는다 */
+  get danger(): number {
+    return this.dangerLevel;
+  }
+
+  /** 화면 조이스틱 상태 — UI 가 누른 자리와 끈 방향을 그대로 그린다 */
+  stickPose(): { active: boolean; x: number; y: number; dx: number; dy: number } {
+    return {
+      active: this.active && this.pointerId !== null,
+      x: this.startX,
+      y: this.startY,
+      dx: this.stickX * STICK_RANGE,
+      dy: this.stickZ * STICK_RANGE,
+    };
+  }
+
+  /** 무게·손상·부품 보너스를 다 반영한 지금의 최고 속도 */
+  private currentMax(): number {
+    const drag = Math.max(0.55, 1 / (1 + this.heft * 0.012));
+    const damaged = HULL_SPEED_FLOOR + (1 - HULL_SPEED_FLOOR) * this.hull;
+    return (BASE_SPEED + this.speedBonus) * drag * damaged;
+  }
+
   setActive(active: boolean): void {
     if (this.active === active) return;
     this.active = active;
@@ -338,7 +394,9 @@ export class Voyage {
     this.pointerId = null;
     this.orbitPointer = null;
     if (active) {
-      // 출항 — 소품들이 물속에서 솟아오른다. 첫 항해든 재출항이든 똑같이.
+      // 출항 — 항해 거리는 매번 0에서 다시 센다
+      this.trip = 0;
+      // 소품들이 물속에서 솟아오른다. 첫 항해든 재출항이든 똑같이.
       if (this.props.length === 0) this.seedProps();
     } else {
       this.vx = 0;
@@ -390,9 +448,8 @@ export class Voyage {
       // 무게 드래그 — 무거운 배는 최고속도가 깎이고(바닥 55%) 가속도 굼뜨다.
       // 엔진(speedBonus)이 무게와 싸운다: 엔진 범벅의 무거운 배는 결국 다시 빨라진다
       const drag = Math.max(0.55, 1 / (1 + this.heft * 0.012));
-      // 손상 페널티 — 긁힌 배는 느리다. 바닥이 있어 멈추지는 않는다
-      const damaged = HULL_SPEED_FLOOR + (1 - HULL_SPEED_FLOOR) * this.hull;
-      const max = (BASE_SPEED + this.speedBonus) * drag * damaged;
+      // 손상 페널티까지 다 반영한 지금의 최고 속도 (currentMax = 무게×손상×보너스)
+      const max = this.currentMax();
 
       // 회두 — 배는 옆으로 미끄러지지 않는다. 뱃머리를 돌려서 그 방향으로만 민다.
       const headingBefore = this.heading;
@@ -414,6 +471,27 @@ export class Voyage {
 
       this.seaX += this.vx * dt;
       this.seaZ += this.vz * dt;
+      this.trip += this.speed * dt;
+
+      // 뱃머리 물보라 — 빨리 달릴수록 뱃머리가 물을 가른다. 좌우 번갈아 방울방울.
+      // 시간이 아니라 거리 기준이라 느려지면 저절로 뜸해진다
+      if (this.speed > SPRAY_MIN_SPEED) {
+        this.sprayAcc += this.speed * dt;
+        if (this.sprayAcc >= SPRAY_EVERY) {
+          this.sprayAcc = 0;
+          this.spraySide = -this.spraySide;
+          const fx = Math.sin(this.heading);
+          const fz = Math.cos(this.heading);
+          const bow = HULL.length * 0.55;
+          this.splash(
+            this.seaX + fx * bow + fz * this.spraySide * 0.7,
+            this.seaZ + fz * bow - fx * this.spraySide * 0.7,
+            0.45 + this.speed * 0.07,
+          );
+        }
+      } else {
+        this.sprayAcc = 0;
+      }
 
       // 체이스 캠 — 달리기 시작해야 선미 뒤로 돌아붙는다.
       // 서 있을 때 돌면 출항 버튼을 누르는 순간 화면이 홱 돈다
@@ -465,8 +543,14 @@ export class Voyage {
       this.orbitOffset *= Math.exp(-dt * 0.6);
       if (Math.abs(this.orbitOffset) < 1e-3) this.orbitOffset = 0;
     }
+    // 충돌 흔들림은 금방 잦아든다 — 여운이 길면 멀미가 된다
+    if (this.shakeMag > 0) {
+      this.shakeMag *= Math.exp(-dt * 3.4);
+      if (this.shakeMag < 0.01) this.shakeMag = 0;
+    }
 
     // --- 소품 배치·연출·정리·충돌 (정박 중에도 가라앉기는 계속 굴린다) ---
+    let maxWarn = 0;
     for (let i = this.props.length - 1; i >= 0; i--) {
       const prop = this.props[i]!;
       const dx = prop.x - this.seaX;
@@ -517,6 +601,27 @@ export class Voyage {
       prop.mesh.position.set(dx, baseY + dip, dz);
       prop.mesh.scale.setScalar(pop);
 
+      // 항로 위험 감지 — 지금 속도 방향으로 계속 가면 닿는 암초인가?
+      // 앞으로의 거리(f)가 가까울수록, 항로에서 옆으로 덜 벗어났을수록 위험하다.
+      let warnTarget = 0;
+      const spd = this.speed;
+      if (this.active && prop.collide && prop.anim === 'idle' && spd > 1.1) {
+        const f = (dx * this.vx + dz * this.vz) / spd;
+        const lat = Math.abs(dx * this.vz - dz * this.vx) / spd;
+        if (f > 0 && f < DANGER_AHEAD && lat < prop.r + BOAT_RADIUS + 1.4) {
+          warnTarget = 1 - f / DANGER_AHEAD;
+        }
+      }
+      prop.warn += (warnTarget - prop.warn) * Math.min(1, dt * 6);
+      if (prop.warn > maxWarn) maxWarn = prop.warn;
+      // 항로에 걸린 암초는 물때 링이 고동친다 — "저거다"가 화면만 보고 읽힌다
+      if (prop.ring !== null) {
+        const pulse =
+          prop.warn > 0.02 ? 1 + 0.3 * prop.warn * (0.6 + 0.4 * Math.sin(elapsed * 10)) : 1;
+        prop.ring.scale.x = pulse;
+        prop.ring.scale.z = pulse;
+      }
+
       if (
         this.active &&
         prop.collide &&
@@ -533,11 +638,17 @@ export class Voyage {
         const nz = -dz / dist;
         this.vx = nx * KNOCKBACK;
         this.vz = nz * KNOCKBACK;
-        // 부딪힌 뱃전 자리에 물보라 — 소리 없는 게임에서 이게 "쿵"이다
-        this.splash(this.seaX + (dx / dist) * BOAT_RADIUS, this.seaZ + (dz / dist) * BOAT_RADIUS, 1.5);
+        // 충격 — 화면이 흔들리고(world 가 shake 를 읽는다) 뱃머리가 살짝 튼다
+        this.shakeMag = 1;
+        this.heading = wrapAngle(this.heading + (Math.random() - 0.5) * 0.34);
+        // 부딪힌 뱃전 자리에 물보라 — 소리 없는 게임에서 이게 "쿵"이다.
+        // 암초 쪽에도 한 번 더: 양쪽에서 튀어야 "부딪혔다"로 읽힌다
+        this.splash(this.seaX + (dx / dist) * BOAT_RADIUS, this.seaZ + (dz / dist) * BOAT_RADIUS, 1.6);
+        this.splash(prop.x, prop.z, 0.9);
         for (const fn of this.hitListeners) fn();
       }
     }
+    this.dangerLevel = maxWarn;
 
     // --- 스플래시 링 — 퍼지며 사라진다 ---
     for (const s of this.splashes) {
@@ -618,6 +729,7 @@ export class Voyage {
     this.group.add(mesh);
     this.props.push({
       kind, x, z, r, collide, floats, depth, mesh, geos,
+      ring: (mesh.userData.ring as Mesh | undefined) ?? null, warn: 0,
       anim: 'rise', t: 0, delay: 0, splashed: true,
       sway: Math.random() * Math.PI * 2,
     });
@@ -676,6 +788,7 @@ export class Voyage {
     ring.scale.y = 0.1;
     ring.position.y = 0.02;
     ring.rotation.y = Math.random() * Math.PI;
+    group.userData.ring = ring;
 
     group.add(main, side, cap, ring);
     return group;
@@ -702,6 +815,7 @@ export class Voyage {
     ring.scale.y = 0.1;
     ring.position.y = 0.02;
     ring.rotation.y = Math.random() * Math.PI;
+    group.userData.ring = ring;
 
     group.add(base, shaft, tip, ring);
     return group;
@@ -736,6 +850,7 @@ export class Voyage {
     ring.scale.y = 0.06;
     ring.position.y = 0.01;
     ring.rotation.y = Math.random() * Math.PI;
+    group.userData.ring = ring;
 
     group.add(mound, left, mossA, mossB, shore, ring);
     return group;

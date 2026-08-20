@@ -129,6 +129,9 @@ const KO: Dict = {
   'voyage.hit': '암초에 긁혔다! 선체가 상했다 — 정박하면 아문다',
   'voyage.hullLabel': '선체',
   'voyage.speed': '{n}노트',
+  'voyage.speedLabel': '속도',
+  'voyage.trip': '이번 항해 {n}해리',
+  'voyage.danger': '⚠ 전방 암초!',
 
   // 방치 컨텐츠 — 돌아왔을 때 배에 생긴 일
   'idle.moss': '자리를 비운 사이 이끼가 앉았다 (+{n})',
@@ -305,6 +308,9 @@ const EN: Dict = {
   'voyage.hit': 'Scraped a reef! Hull damaged — anchoring mends it',
   'voyage.hullLabel': 'Hull',
   'voyage.speed': '{n} kn',
+  'voyage.speedLabel': 'Speed',
+  'voyage.trip': 'Voyage {n} nmi',
+  'voyage.danger': '⚠ Reef ahead!',
 
   'idle.moss': 'Moss settled in while you were away (+{n})',
   'idle.gullNest': 'A gull built a nest',

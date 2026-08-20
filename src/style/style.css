@@ -1593,41 +1593,155 @@ body {
   color: var(--mh-role-ink);
 }
 
-/* 항해 선체 내구도 게이지 — 암초에 긁히면 줄고, 정박하면 다시 찬다 */
-.hull {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+/* ------------------------------------------------------------ 항해 계기판 */
+
+.voyage-bar {
+  position: relative;
 }
 
-.hull__label {
+/* 전방 암초 경고 — 항로 위에 암초가 걸리면 계기판 위로 배지가 뜬다 */
+.voyage-danger {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--mh-role-accentDeep);
+  color: var(--mh-role-surface);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--mh-role-ink) 30%, transparent);
+  animation: voyage-danger-pulse 1.1s ease-in-out infinite;
+}
+
+.voyage-danger.is-hot {
+  animation-duration: 0.5s;
+}
+
+@keyframes voyage-danger-pulse {
+  50% {
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+
+.voyage-trip {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--mh-role-ink) 62%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 속도·선체 게이지 한 쌍 */
+.voyage-gauges {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.vgauge {
+  flex: 1;
+  max-width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vgauge__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.vgauge__label {
   font-size: 11px;
   font-weight: 800;
   color: color-mix(in srgb, var(--mh-role-ink) 72%, transparent);
 }
 
-.hull__bar {
+.vgauge__num {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--mh-role-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.vgauge__bar {
   display: block;
-  width: 96px;
   height: 7px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--mh-role-ink) 14%, transparent);
   overflow: hidden;
 }
 
-.hull__fill {
+.vgauge__fill {
   display: block;
   width: 100%;
   height: 100%;
   border-radius: 999px;
   background: var(--mh-role-gauge);
   transform-origin: left center;
-  transition: transform 240ms ease, background-color 240ms ease;
+  transition: transform 160ms ease, background-color 240ms ease;
 }
 
-.hull__fill.is-low {
+.vgauge__fill.is-low {
   background: var(--mh-role-accentDeep);
+}
+
+/* 조작을 익히면 힌트는 서서히 걷힌다 — 계기판 위의 긴 문장은 소음 */
+.voyage-hint {
+  transition: opacity 700ms ease;
+}
+
+.voyage-hint.is-faded {
+  opacity: 0;
+}
+
+/* 터치 조이스틱 — 누른 자리에 베이스, 끈 방향으로 노브. 장식이라 입력을 막지 않는다 */
+.voyage-stick {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.voyage-stick__base {
+  position: absolute;
+  width: 92px;
+  height: 92px;
+  margin: -46px 0 0 -46px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--mh-role-surface) 80%, transparent);
+  background: color-mix(in srgb, var(--mh-role-ink) 10%, transparent);
+}
+
+.voyage-stick__knob {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border-radius: 50%;
+  background: var(--mh-role-accent);
+  border: 3px solid var(--mh-role-surface);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mh-role-ink) 34%, transparent);
+}
+
+/* 암초 충돌 플래시 — 화면 가장자리만 붉게 한 번 번쩍 (WAAPI 가 opacity 를 굴린다) */
+.voyage-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 52%,
+    color-mix(in srgb, var(--mh-role-accentDeep) 55%, transparent) 100%
+  );
 }
 
 .arrange-bar__actions {
